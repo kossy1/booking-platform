@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard — BookEasy</title>
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body>
+  <main class="py-5">
+    <div class="container">
+
+      <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4" data-aos="fade-up">
+        <div>
+          <h1 class="fw-bold mb-1">Dashboard</h1>
+          <p class="text-secondary mb-0" id="greeting">Your business at a glance</p>
+        </div>
+        <div id="business-picker-slot"></div>
+      </div>
+
+      <div class="row g-3 mb-4">
+        <div class="col-6 col-lg-3" data-aos="fade-up" data-aos-delay="0">
+          <div class="card stat-card border-0 shadow-sm">
+            <div class="icon-wrap bg-primary bg-opacity-10 text-primary">
+              <i class="bi bi-calendar-check"></i>
+            </div>
+            <div class="small text-secondary">Today's bookings</div>
+            <div class="fw-bold fs-4" id="stat-today">—</div>
+          </div>
+        </div>
+        <div class="col-6 col-lg-3" data-aos="fade-up" data-aos-delay="60">
+          <div class="card stat-card border-0 shadow-sm">
+            <div class="icon-wrap bg-success bg-opacity-10 text-success">
+              <i class="bi bi-graph-up-arrow"></i>
+            </div>
+            <div class="small text-secondary">Total bookings</div>
+            <div class="fw-bold fs-4" id="stat-total">—</div>
+          </div>
+        </div>
+        <div class="col-6 col-lg-3" data-aos="fade-up" data-aos-delay="120">
+          <div class="card stat-card border-0 shadow-sm">
+            <div class="icon-wrap bg-warning bg-opacity-10 text-warning">
+              <i class="bi bi-cash-coin"></i>
+            </div>
+            <div class="small text-secondary">Revenue (30d)</div>
+            <div class="fw-bold fs-4" id="stat-revenue">—</div>
+          </div>
+        </div>
+        <div class="col-6 col-lg-3" data-aos="fade-up" data-aos-delay="180">
+          <div class="card stat-card border-0 shadow-sm">
+            <div class="icon-wrap bg-info bg-opacity-10 text-info">
+              <i class="bi bi-star-fill"></i>
+            </div>
+            <div class="small text-secondary">Avg. rating</div>
+            <div class="fw-bold fs-4" id="stat-rating">—</div>
+          </div>
+        </div>
+      </div>
+
+      <h5 class="fw-bold mb-3" data-aos="fade-up">Today's schedule</h5>
+      <div id="schedule">
+        <div class="text-center py-5">
+          <div class="spinner-border text-primary"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script type="module">
+    import { renderLayout } from '/js/layout.js';
+    import {
+      requireAuth, auth, getMyBusinesses, listBookings,
+      fmtTime, fmtMoney, fmtMoneyShort, toast,
+    } from '/js/api.js';
+
+    renderLayout({ active: 'dashboard' });
+
+    if (!requireAuth()) throw new Error('redirected');
+
+    // Only owners and staff can see the dashboard
+    if (auth.user.role !== 'business_owner' && auth.user.role !== 'staff') {
+      location.href = '/my-bookings.html';
+      throw new Error('not owner');
+    }
+
+    // ─── State ───────────────────────────────────────
+    let myBusinesses = [];
+    let activeBusinessId = null;
+    let activeBusiness = null;
+
+    // ─── Boot ────────────────────────────────────────
+    document.getElementById('greeting').textContent =
+      `Welcome back, ${auth.user.fullName || auth.user.email}`;
+
+    load();
+
+    async function load() {
+      try {
+        const { businesses } = await getMyBusinesses();
+        myBusinesses = businesses || [];
+
+        if (!myBusinesses.length) {
+          showOnboarding();
+          return;
+        }
+
+        // Pick the first business by default
+        activeBusiness = myBusinesses[0];
+        activeBusinessId = activeBusiness.id;
+
+        renderBusinessPicker();
+        await loadBookings();
+        renderRating();
+
+      } catch (err) {
+        document.getElementById('schedule').innerHTML =
+          `<div class="alert alert-danger">${err.message}</div>`;
+      }
+    }
+
+    // ─── Onboarding CTA (no business yet) ────────────
+    function showOnboarding() {
+      setStat('stat-today',   '0');
+      setStat('stat-total',   '0');
+      setStat('stat-revenue', fmtMoney(0));
+      setStat('stat-rating',  '—');
+
+      document.getElementById('schedule').innerHTML = `
+        <div class="card border-0 shadow-sm" data-aos="fade-up">
+          <div class="card-body text-center py-5">
+            <div style="font-size:64px; opacity:0.4;" class="mb-3">🏪</div>
+            <h4 class="fw-bold">Set up your business</h4>
+            <p class="text-secondary mb-4"
+               style="max-width: 460px; margin: 0 auto;">
+              You're registered as a business owner, but you haven't created a
+              business profile yet. Add one to start accepting bookings.
+            </p>
+            <a href="/onboarding.html" class="btn btn-primary btn-lg px-4">
+              <i class="bi bi-plus-circle me-2"></i>Create your business
+            </a>
+          </div>
+        </div>`;
+    }
+
+    // ─── Business picker (only shown when >1) ────────
+    function renderBusinessPicker() {
+      const slot = document.getElementById('business-picker-slot');
+      if (myBusinesses.length <= 1) { slot.innerHTML = ''; return; }
+
+      slot.innerHTML = `
+        <label class="form-label small fw-semibold mb-1">Viewing</label>
+        <select id="business-picker" class="form-select" style="min-width:220px;">
+          ${myBusinesses.map(b => `
+            <option value="${b.id}" ${b.id === activeBusinessId ? 'selected' : ''}>
+              ${b.name}
+            </option>
+          `).join('')}
+        </select>`;
+
+      document.getElementById('business-picker').addEventListener('change', async (e) => {
+        activeBusinessId = e.target.value;
+        activeBusiness = myBusinesses.find(b => b.id === activeBusinessId) || null;
+        document.getElementById('schedule').innerHTML = `
+          <div class="text-center py-5">
+            <div class="spinner-border text-primary"></div>
+          </div>`;
+        await loadBookings();
+        renderRating();
+      });
+    }
+
+    // ─── Bookings ────────────────────────────────────
+    async function loadBookings() {
+      try {
+        const data = await listBookings({ businessId: activeBusinessId });
+        const bookings = data.bookings ?? data;
+
+        renderStats(bookings);
+        renderSchedule(bookings);
+
+      } catch (err) {
+        document.getElementById('schedule').innerHTML =
+          `<div class="alert alert-danger">${err.message}</div>`;
+      }
+    }
+
+    // ─── Stats ───────────────────────────────────────
+    function renderStats(bookings) {
+      const today = new Date().toDateString();
+      const todays = bookings.filter(b =>
+        new Date(b.start_time).toDateString() === today &&
+        b.status !== 'cancelled'
+      );
+
+      const active = bookings.filter(b => b.status !== 'cancelled');
+
+      // Revenue: last 30 days
+      const thirtyDaysAgo = Date.now() - 30 * 86_400_000;
+      const recentRevenue = active
+        .filter(b => new Date(b.start_time).getTime() >= thirtyDaysAgo)
+        .reduce((sum, b) => sum + Number(b.total_amount || 0), 0);
+
+      setStat('stat-today',   todays.length);
+      setStat('stat-total',   active.length);
+      setStat('stat-revenue', fmtMoneyShort(recentRevenue));
+    }
+
+    function renderRating() {
+      const rating = Number(activeBusiness?.rating_avg || 0);
+      const count  = Number(activeBusiness?.rating_count || 0);
+      const el = document.getElementById('stat-rating');
+      el.textContent = count > 0 ? rating.toFixed(1) : '—';
+    }
+
+    function setStat(id, value) {
+      const el = document.getElementById(id);
+      if (el) el.textContent = value;
+    }
+
+    // ─── Schedule table ──────────────────────────────
+    function renderSchedule(bookings) {
+      const today = new Date().toDateString();
+      const todays = bookings
+        .filter(b =>
+          new Date(b.start_time).toDateString() === today &&
+          b.status !== 'cancelled'
+        )
+        .sort((a, b) => a.start_time.localeCompare(b.start_time));
+
+      if (!todays.length) {
+        document.getElementById('schedule').innerHTML = `
+          <div class="card border-0 shadow-sm" data-aos="fade-up">
+            <div class="card-body">
+              <div class="empty-state">
+                <div class="icon">☕</div>
+                <h5 class="fw-bold">No bookings today</h5>
+                <p class="text-secondary mb-0">Enjoy the break!</p>
+              </div>
+            </div>
+          </div>`;
+        return;
+      }
+
+      document.getElementById('schedule').innerHTML = `
+        <div class="card border-0 shadow-sm" data-aos="fade-up">
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>Time</th>
+                  <th>Customer</th>
+                  <th>Status</th>
+                  <th class="text-end">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${todays.map(b => `
+                  <tr>
+                    <td class="fw-semibold">
+                      ${fmtTime(b.start_time)} – ${fmtTime(b.end_time)}
+                    </td>
+                    <td>
+                      <div class="d-flex align-items-center gap-2">
+                        <div class="rounded-circle bg-primary bg-opacity-10 text-primary
+                                    d-flex align-items-center justify-content-center"
+                             style="width:32px;height:32px;font-size:0.8rem;font-weight:700;">
+                          ${String(b.customer_id).slice(0, 2).toUpperCase()}
+                        </div>
+                        <span class="text-secondary">
+                          Customer #${String(b.customer_id).slice(0, 6)}
+                        </span>
+                      </div>
+                    </td>
+                    <td>
+                      <span class="badge ${
+                        b.status === 'confirmed' ? 'text-bg-success' :
+                        b.status === 'completed' ? 'text-bg-info'    :
+                        'text-bg-warning'
+                      } text-capitalize">${b.status}</span>
+                    </td>
+                    <td class="text-end fw-semibold">
+                      ${fmtMoney(b.total_amount)}
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>`;
+    }
+  </script>
+</body>
+</html>

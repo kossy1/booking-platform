@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Business — BookEasy</title>
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body>
+  <main class="py-5">
+    <div class="container" id="app">
+      <div class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+    </div>
+  </main>
+
+  <script type="module">
+    import { renderLayout } from '/js/layout.js';
+    import {
+      getBusiness, getAvailability, createBooking, requireAuth,
+      $, fmtDateOnly, fmtTime, fmtMoney, toast,
+    } from '/js/api.js';
+
+    renderLayout({ active: 'browse' });
+
+    const params = new URLSearchParams(location.search);
+    const businessId = params.get('id');
+    const root = document.getElementById('app');
+
+    if (!businessId) {
+      root.innerHTML = `<div class="alert alert-danger">Missing ?id= parameter. <a href="/browse.html">Back to browse</a>.</div>`;
+      throw new Error('no id');
+    }
+
+    // ── Load business from API ────────────────────────
+    let business;
+    try {
+      business = await getBusiness(businessId);
+      business.cover = business.cover_url ||
+        'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=1600&q=80&auto=format&fit=crop';
+    } catch (err) {
+      root.innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
+      throw err;
+    }
+
+    if (!business.services?.length) {
+      root.innerHTML = `<div class="alert alert-warning">This business hasn't added any services yet.</div>`;
+      throw new Error('no services');
+    }
+
+    let selectedService = business.services[0];
+    let selectedSlot    = null;
+
+    // ── Render ────────────────────────────────────────
+    function render() {
+      root.innerHTML = `
+        <div class="position-relative rounded-4 overflow-hidden mb-4" style="height:320px;" data-aos="fade-up">
+          <img src="${business.cover}" alt="${business.name}"
+               style="width:100%; height:100%; object-fit:cover;"
+               onerror="this.style.display='none'" />
+          <div style="position:absolute; inset:0; background:linear-gradient(to top, rgba(0,0,0,0.75), rgba(0,0,0,0.1) 60%);"></div>
+          <div class="position-absolute bottom-0 start-0 end-0 p-4 text-white">
+            <span class="badge text-bg-light text-dark text-capitalize mb-2">${business.category}</span>
+            <h1 class="fw-bold mb-1 text-white">${business.name}</h1>
+            <p class="mb-0 opacity-75">
+              <i class="bi bi-geo-alt"></i> ${business.address_line1 || business.city || '—'}
+            </p>
+          </div>
+        </div>
+
+        <div class="row g-3 mb-4" data-aos="fade-up">
+          <div class="col-6 col-md-3">
+            <div class="card border-0 shadow-sm p-3 text-center">
+              <div class="text-warning fs-4"><i class="bi bi-star-fill"></i></div>
+              <div class="fw-bold">${Number(business.rating_avg || 0).toFixed(1)}</div>
+              <div class="text-secondary small">${business.rating_count || 0} reviews</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="card border-0 shadow-sm p-3 text-center">
+              <div class="text-primary fs-4"><i class="bi bi-clock"></i></div>
+              <div class="fw-bold">${selectedService.duration_minutes} min</div>
+              <div class="text-secondary small">selected service</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="card border-0 shadow-sm p-3 text-center">
+              <div class="text-success fs-4"><i class="bi bi-shield-check"></i></div>
+              <div class="fw-bold">Verified</div>
+              <div class="text-secondary small">business</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="card border-0 shadow-sm p-3 text-center">
+              <div class="text-primary fs-4"><i class="bi bi-credit-card"></i></div>
+              <div class="fw-bold">Pay online</div>
+              <div class="text-secondary small">or in person</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="row g-4">
+          <div class="col-lg-8">
+            <p class="text-secondary mb-4" data-aos="fade-up">${business.description || ''}</p>
+
+            <h4 class="fw-bold mb-3" data-aos="fade-up">
+              <i class="bi bi-scissors text-primary me-2"></i>Choose a service
+            </h4>
+            <div class="row g-3 mb-5">
+              ${business.services.map((s, i) => `
+                <div class="col-md-6" data-aos="fade-up" data-aos-delay="${i * 60}">
+                  <div class="card border-0 shadow-sm h-100 service-card"
+                       data-service-id="${s.id}"
+                       style="cursor:pointer; ${s.id === selectedService.id ? 'border:2px solid #667eea !important;' : ''}">
+                    <div class="card-body">
+                      <div class="d-flex justify-content-between align-items-start mb-2">
+                        <h6 class="fw-bold mb-0">${s.name}</h6>
+                        <span class="badge text-bg-light">${s.duration_minutes}m</span>
+                      </div>
+                      <p class="text-secondary small mb-3">${s.description || ''}</p>
+                      <div class="d-flex justify-content-between align-items-center">
+                        <span class="fw-bold text-primary fs-5">${fmtMoney(s.price)}</span>
+                        ${s.id === selectedService.id ? '<span class="badge text-bg-primary">Selected</span>' : ''}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+
+            <h4 class="fw-bold mb-3" data-aos="fade-up">
+              <i class="bi bi-calendar-week text-primary me-2"></i>Pick a time
+            </h4>
+            <div id="slots" class="card border-0 shadow-sm" data-aos="fade-up">
+              <div class="card-body">
+                <div class="text-center py-4"><div class="spinner-border text-primary"></div></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-lg-4">
+            <div class="card border-0 shadow-sm sticky-top" id="confirm-card"
+                 style="top: 100px; display:none;" data-aos="fade-left">
+              <div class="card-body">
+                <h5 class="fw-bold mb-3">Your booking</h5>
+                <div id="summary"></div>
+
+                <div class="mb-3">
+                  <label for="notes" class="form-label small fw-semibold">Notes (optional)</label>
+                  <textarea id="notes" class="form-control" rows="3"
+                            placeholder="Anything we should know?"></textarea>
+                </div>
+
+                <button id="book-btn" class="btn btn-primary w-100 btn-lg fw-semibold">
+                  <i class="bi bi-check-circle me-2"></i>Confirm booking
+                </button>
+                <p class="text-secondary small text-center mt-3 mb-0">
+                  <i class="bi bi-shield-lock"></i> Free cancellation up to 24h before
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      wireServiceCards();
+      loadSlots();
+    }
+
+    function wireServiceCards() {
+      document.querySelectorAll('.service-card').forEach(card => {
+        card.addEventListener('click', () => {
+          selectedService = business.services.find(s => s.id === card.dataset.serviceId);
+          selectedSlot = null;
+          render();
+        });
+      });
+    }
+
+    async function loadSlots() {
+      const $slots = document.getElementById('slots');
+      try {
+        const { from, to } = nextWorkWeek();
+        const data = await getAvailability({
+          businessId: business.id,
+          serviceId: selectedService.id,
+          dateFrom: from,
+          dateTo: to,
+        });
+
+        if (!data.slots || !data.slots.length) {
+          $slots.innerHTML = `
+            <div class="card-body">
+              <div class="empty-state">
+                <div class="icon">📅</div>
+                <h6>No slots available this week</h6>
+                <p class="mb-0 small">Try a different service or check back later.</p>
+              </div>
+            </div>`;
+          return;
+        }
+
+        const byDay = {};
+        for (const slot of data.slots) {
+          const day = new Date(slot.start).toDateString();
+          (byDay[day] ||= []).push(slot);
+        }
+
+        $slots.innerHTML = `<div class="card-body">${
+          Object.entries(byDay).map(([day, slots]) => `
+            <div class="mb-4">
+              <h6 class="text-uppercase text-secondary small fw-bold mb-2">
+                ${fmtDateOnly(slots[0].start)}
+              </h6>
+              <div class="row g-2">
+                ${slots.map(s => `
+                  <div class="col-4 col-sm-3 col-md-2">
+                    <button class="slot w-100" data-start="${s.start}" data-staff="${s.staffId}">
+                      ${fmtTime(s.start)}
+                    </button>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          `).join('')
+        }</div>`;
+
+        document.querySelectorAll('.slot').forEach(btn => {
+          btn.addEventListener('click', () => {
+            document.querySelectorAll('.slot').forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
+            selectedSlot = { start: btn.dataset.start, staffId: btn.dataset.staff };
+            showConfirm();
+          });
+        });
+
+        showConfirm();
+      } catch (err) {
+        $slots.innerHTML = `<div class="card-body"><div class="alert alert-danger mb-0">${err.message}</div></div>`;
+      }
+    }
+
+    function showConfirm() {
+      const card = document.getElementById('confirm-card');
+      if (!selectedSlot) { card.style.display = 'none'; return; }
+
+      card.style.display = 'block';
+      document.getElementById('summary').innerHTML = `
+        <div class="d-flex flex-column gap-2 mb-3">
+          <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-scissors text-primary"></i>
+            <span class="fw-semibold">${selectedService.name}</span>
+          </div>
+          <div class="d-flex align-items-center gap-2 small">
+            <i class="bi bi-calendar-event text-secondary"></i>
+            <span>${fmtDateOnly(selectedSlot.start)}</span>
+          </div>
+          <div class="d-flex align-items-center gap-2 small">
+            <i class="bi bi-clock text-secondary"></i>
+            <span>${fmtTime(selectedSlot.start)} · ${selectedService.duration_minutes} min</span>
+          </div>
+          <hr class="my-2" />
+          <div class="d-flex justify-content-between">
+            <span class="text-secondary">Total</span>
+            <span class="fw-bold fs-5">${fmtMoney(selectedService.price)}</span>
+          </div>
+        </div>
+      `;
+
+      const btn = document.getElementById('book-btn');
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-check-circle me-2"></i>Confirm booking';
+      btn.onclick = onBook;
+    }
+
+    async function onBook() {
+      if (!requireAuth()) return;   // not logged in → redirect
+
+      const btn = document.getElementById('book-btn');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Booking…';
+
+      try {
+        const booking = await createBooking({
+          businessId: business.id,
+          serviceId: selectedService.id,
+          staffId: selectedSlot.staffId,
+          startTime: selectedSlot.start,
+          customerNotes: document.getElementById('notes').value || undefined,
+          // NO customerId — server gets it from JWT
+        });
+        window.location.href = `/confirmation.html?bookingId=${booking.id}`;
+      } catch (err) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-check-circle me-2"></i>Confirm booking';
+        toast(err.message || 'Booking failed', 'error');
+      }
+    }
+
+    function nextWorkWeek() {
+      const today = new Date();
+      const day = today.getDay();
+      const daysToMon = (8 - day) % 7 || 7;
+      const monday = new Date(today); monday.setDate(today.getDate() + daysToMon);
+      const friday = new Date(monday); friday.setDate(monday.getDate() + 4);
+      const fmt = (d) => d.toISOString().slice(0, 10);
+      return { from: fmt(monday), to: fmt(friday) };
+    }
+
+    render();
+  </script>
+</body>
+</html>

@@ -1,0 +1,36 @@
+{
+  "name": "booking-service",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@fastify/cors": "^9.0.0",
+    "@fastify/helmet": "^11.1.0",
+    "@fastify/multipart": "^8.3.1",
+    "@fastify/rate-limit": "^9.1.0",
+    "@fastify/static": "^7.0.4",
+    "bcrypt": "^6.0.0",
+    "bcryptjs": "^3.0.3",
+    "fastify": "^4.28.0",
+    "ioredis": "^5.4.0",
+    "jimp": "^1.6.1",
+    "jsonwebtoken": "^9.0.3",
+    "kysely": "^0.27.0",
+    "luxon": "^3.4.0",
+    "mysql2": "^3.11.0",
+    "pino": "^9.0.0",
+    "sharp": "^0.35.4",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^20.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.4.0"
+  }
+}

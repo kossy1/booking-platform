@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Booking confirmed — BookEasy</title>
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body>
+  <main class="py-5">
+    <div class="container" style="max-width:640px;" id="app">
+      <div class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+    </div>
+  </main>
+
+  <script type="module">
+    import { renderLayout } from '/js/layout.js';
+    import { getBooking, cancelBooking, fmtDateOnly, fmtTime, fmtMoney, toast } from '/js/api.js';
+
+    renderLayout();
+
+    const bookingId = new URLSearchParams(location.search).get('bookingId');
+    const root = document.getElementById('app');
+
+    if (!bookingId) {
+      root.innerHTML = `<div class="alert alert-danger">No booking ID provided.</div>`;
+    } else {
+      load();
+    }
+
+    async function load() {
+      try {
+        const b = await getBooking(bookingId);
+        render(b);
+      } catch (err) {
+        root.innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
+      }
+    }
+
+    function render(b) {
+      root.innerHTML = `
+        <div class="card border-0 shadow-lg" data-aos="zoom-in">
+          <div class="card-body p-4 p-md-5 text-center">
+            <div class="success-check mb-3"><i class="bi bi-check-lg"></i></div>
+            <h1 class="fw-bold h3 mb-2">Booking confirmed!</h1>
+            <p class="text-secondary mb-4">We've sent a confirmation to your email.</p>
+
+            <div class="text-start bg-light rounded-3 p-4 mb-4">
+              <div class="d-flex align-items-center gap-3 mb-3">
+                <i class="bi bi-calendar-event fs-4 text-primary"></i>
+                <div>
+                  <div class="small text-secondary">Date</div>
+                  <div class="fw-semibold">${fmtDateOnly(b.start_time)}</div>
+                </div>
+              </div>
+              <div class="d-flex align-items-center gap-3 mb-3">
+                <i class="bi bi-clock fs-4 text-primary"></i>
+                <div>
+                  <div class="small text-secondary">Time</div>
+                  <div class="fw-semibold">${fmtTime(b.start_time)} – ${fmtTime(b.end_time)}</div>
+                </div>
+              </div>
+              <div class="d-flex align-items-center gap-3 mb-3">
+                <i class="bi bi-cash-coin fs-4 text-primary"></i>
+                <div>
+                  <div class="small text-secondary">Total</div>
+                  <div class="fw-semibold">${fmtMoney(b.total_amount)}</div>
+                </div>
+              </div>
+              <div class="d-flex align-items-center gap-3">
+                <i class="bi bi-bookmark fs-4 text-primary"></i>
+                <div>
+                  <div class="small text-secondary">Booking ID</div>
+                  <div class="fw-semibold"><code>${b.id.slice(0, 8)}</code></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="d-flex flex-column flex-sm-row gap-2 justify-content-center">
+              <a href="/my-bookings.html" class="btn btn-primary px-4">
+                <i class="bi bi-list-check me-2"></i>View my bookings
+              </a>
+              <a href="/browse.html" class="btn btn-outline-primary px-4">
+                Book another
+              </a>
+            </div>
+
+            <button id="cancel-btn" class="btn btn-link text-danger mt-4 small text-decoration-none">
+              <i class="bi bi-x-circle me-1"></i>Cancel this booking
+            </button>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('cancel-btn').addEventListener('click', async () => {
+        if (!confirm('Cancel this booking? This cannot be undone.')) return;
+        try {
+          await cancelBooking(bookingId, 'Cancelled by customer');
+          toast('Booking cancelled', 'success');
+          setTimeout(() => location.href = '/my-bookings.html', 800);
+        } catch (err) {
+          toast(err.message, 'error');
+        }
+      });
+    }
+  </script>
+</body>
+</html>

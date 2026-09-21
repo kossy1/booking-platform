@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Browse — BookEasy</title>
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body>
+  <main class="py-5">
+    <div class="container">
+
+      <div class="mb-4" data-aos="fade-up">
+        <h1 class="fw-bold mb-1">Browse businesses</h1>
+        <p class="text-secondary mb-0">Find a salon, barber, clinic, or consultant near you</p>
+      </div>
+
+      <div class="card border-0 shadow-sm mb-4" data-aos="fade-up">
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <div class="input-group">
+                <span class="input-group-text bg-white border-end-0">
+                  <i class="bi bi-search text-secondary"></i>
+                </span>
+                <input id="q" type="search" class="form-control border-start-0"
+                       placeholder="Search by name…" />
+              </div>
+            </div>
+            <div class="col-md-3">
+              <select id="category" class="form-select">
+                <option value="">All categories</option>
+                <option value="salon">Salon</option>
+                <option value="barber">Barber</option>
+                <option value="clinic">Clinic</option>
+                <option value="photographer">Photographer</option>
+                <option value="consultant">Consultant</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <input id="city" type="text" class="form-control" placeholder="City" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="results" class="row g-4">
+        <div class="col-12 text-center py-5">
+          <div class="spinner-border text-primary"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script type="module">
+    import { renderLayout } from '/js/layout.js';
+    import { getBusinesses } from '/js/api.js';
+
+    renderLayout({ active: 'browse' });
+
+    // ─── Config ──────────────────────────────────────────
+    const FALLBACK_IMG =
+      'https://images.unsplash.com/photo-1521590832167-7bcbfaa6381f?w=800&q=80&auto=format&fit=crop';
+
+    // Per-category defaults so empty cards still look nice
+    const CATEGORY_FALLBACK = {
+      salon:        'https://images.unsplash.com/photo-1560066984-138dadb4c035?w=800&q=80&auto=format&fit=crop',
+      barber:       'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=800&q=80&auto=format&fit=crop',
+      clinic:       'https://images.unsplash.com/photo-1629909613654-28e377c37b09?w=800&q=80&auto=format&fit=crop',
+      photographer: 'https://images.unsplash.com/photo-1554048612-b6a482bc67e5?w=800&q=80&auto=format&fit=crop',
+      consultant:   'https://images.unsplash.com/photo-1552664730-d307ca884978?w=800&q=80&auto=format&fit=crop',
+      other:        FALLBACK_IMG,
+    };
+
+    const $q       = document.getElementById('q');
+    const $cat     = document.getElementById('category');
+    const $city    = document.getElementById('city');
+    const $results = document.getElementById('results');
+
+    let ALL = [];
+
+    // ─── Helpers ─────────────────────────────────────────
+
+    /** Turn whatever the API returns into something <img src> accepts. */
+    function resolveImage(b) {
+      // Priority: cover_url → cover → logo_url → logo → per-category default
+      const candidate =
+        b.cover_url || b.cover ||
+        b.logo_url  || b.logo  ||
+        '';
+
+      if (!candidate) {
+        return CATEGORY_FALLBACK[b.category] || FALLBACK_IMG;
+      }
+      // Absolute URL — use as-is
+      if (/^https?:\/\//i.test(candidate)) return candidate;
+      // Relative path from our own server — prefix with origin
+      if (candidate.startsWith('/')) return candidate;   // same-origin is fine
+      // Bare filename — assume it's under /uploads/
+      return `/uploads/${candidate.replace(/^\/+/, '')}`;
+    }
+
+    /** Escape HTML for safe interpolation */
+    function esc(s) {
+      return String(s ?? '').replace(/[&<>"']/g, (c) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+      }[c]));
+    }
+
+    // ─── Data fetch ──────────────────────────────────────
+    async function fetchBusinesses() {
+      try {
+        const data = await getBusinesses();
+        const list = data.businesses ?? [];
+
+        console.log('[browse] loaded businesses:', list.length);
+        list.forEach(b => {
+          console.log(`  · ${b.name}  cover_url=${b.cover_url ?? 'null'}`);
+        });
+
+        ALL = list.map(b => ({
+          id:       b.id,
+          name:     b.name,
+          category: b.category,
+          city:     b.city || '—',
+          rating:   Number(b.rating_avg) || 0,
+          reviews:  Number(b.rating_count) || 0,
+          img:      resolveImage(b),                    // ← resolved URL
+        }));
+
+        render();
+      } catch (err) {
+        $results.innerHTML = `
+          <div class="col-12">
+            <div class="alert alert-danger">
+              <i class="bi bi-exclamation-triangle me-1"></i>
+              ${esc(err.message || 'Failed to load businesses')}
+            </div>
+          </div>`;
+      }
+    }
+
+    // ─── Render ──────────────────────────────────────────
+    function render() {
+      const q    = $q.value.trim().toLowerCase();
+      const cat  = $cat.value;
+      const city = $city.value.trim().toLowerCase();
+
+      const filtered = ALL.filter(b =>
+        (!q    || b.name.toLowerCase().includes(q)) &&
+        (!cat  || b.category === cat) &&
+        (!city || b.city.toLowerCase().includes(city))
+      );
+
+      if (!filtered.length) {
+        $results.innerHTML = `
+          <div class="col-12">
+            <div class="empty-state">
+              <div class="icon">🔍</div>
+              <h5>No businesses found</h5>
+              <p class="mb-0">Try adjusting your filters.</p>
+            </div>
+          </div>`;
+        return;
+      }
+
+      $results.innerHTML = filtered.map((b, i) => `
+        <div class="col-sm-6 col-lg-4" data-aos="fade-up" data-aos-delay="${Math.min(i * 50, 300)}">
+          <a href="/business.html?id=${encodeURIComponent(b.id)}"
+             class="card business-card border-0 shadow-sm h-100 text-decoration-none">
+            <div class="business-card-cover" style="height:200px; background:#f3f4f6;">
+              <img src="${esc(b.img)}"
+                   alt="${esc(b.name)}"
+                   loading="lazy"
+                   data-fallback="${esc(CATEGORY_FALLBACK[b.category] || FALLBACK_IMG)}"
+                   onerror="window.__imgFallback && window.__imgFallback(this)" />
+              <div class="overlay"></div>
+              <span class="badge text-bg-light position-absolute top-0 end-0 m-2 text-capitalize">
+                ${esc(b.category)}
+              </span>
+            </div>
+            <div class="card-body">
+              <h6 class="fw-bold mb-1">${esc(b.name)}</h6>
+              <p class="text-secondary small mb-2">
+                <i class="bi bi-geo-alt"></i> ${esc(b.city)}
+              </p>
+              <div class="d-flex align-items-center gap-1 small">
+                <i class="bi bi-star-fill text-warning"></i>
+                <strong>${b.rating.toFixed(1)}</strong>
+                <span class="text-secondary">(${b.reviews} reviews)</span>
+              </div>
+            </div>
+          </a>
+        </div>
+      `).join('');
+
+      // Re-trigger AOS for freshly inserted nodes
+      window.AOS?.refreshHard?.();
+    }
+
+    // ─── Image fallback chain (global) ──────────────────
+    // Prevent infinite loops: if a fallback image itself 404s, drop it.
+    window.__imgFallback = function (img) {
+      const fb = img.dataset.fallback;
+      const tried = img.dataset.triedFallback === '1';
+      if (fb && !tried) {
+        img.dataset.triedFallback = '1';
+        img.src = fb;
+      } else {
+        // Last resort — a neutral gradient, no more network
+        img.onerror = null;
+        img.style.background = 'linear-gradient(135deg, #667eea, #764ba2)';
+        img.removeAttribute('src');
+      }
+    };
+
+    // ─── Wire filters ────────────────────────────────────
+    [$q, $cat, $city].forEach(el => el.addEventListener('input', render));
+
+    // ─── Boot ────────────────────────────────────────────
+    fetchBusinesses();
+  </script>
+</body>
+</html>

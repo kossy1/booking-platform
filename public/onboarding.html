@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Set up your business — BookEasy</title>
+  <link rel="stylesheet" href="/css/app.css" />
+  <style>
+    /* ─── Upload dropzone styles ─────────────────────── */
+    .upload-zone {
+      border: 2px dashed var(--bs-border-color);
+      border-radius: var(--r-md);
+      background: var(--gray-50);
+      padding: 2rem 1.5rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.15s ease, background 0.15s ease;
+      position: relative;
+    }
+    .upload-zone:hover,
+    .upload-zone:focus-visible {
+      border-color: var(--brand-primary);
+      background: rgba(102, 126, 234, 0.04);
+      outline: none;
+    }
+    .upload-zone.dragover {
+      border-color: var(--brand-primary);
+      background: rgba(102, 126, 234, 0.08);
+      transform: scale(1.005);
+    }
+    .upload-zone.has-error {
+      border-color: var(--color-danger);
+      background: rgba(239, 68, 68, 0.04);
+    }
+    .upload-zone .icon {
+      font-size: 2.5rem;
+      color: var(--brand-primary);
+      margin-bottom: 0.5rem;
+      display: block;
+    }
+    .upload-zone input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+    }
+
+    /* Preview */
+    .upload-preview {
+      position: relative;
+      border-radius: var(--r-md);
+      overflow: hidden;
+      aspect-ratio: 16 / 9;
+      background: var(--gray-100);
+    }
+    .upload-preview img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .upload-preview .remove-btn {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: rgba(0, 0, 0, 0.6);
+      color: #fff;
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    .upload-preview .remove-btn:hover { background: var(--color-danger); }
+
+    /* Uploading overlay */
+    .upload-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(255, 255, 255, 0.85);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 0.5rem;
+      font-size: 0.875rem;
+      color: var(--gray-600);
+      backdrop-filter: blur(4px);
+    }
+    .upload-progress {
+      width: 60%;
+      height: 4px;
+      background: var(--gray-200);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .upload-progress-bar {
+      height: 100%;
+      width: 0;
+      background: var(--brand-primary);
+      transition: width 0.2s ease;
+    }
+
+    .upload-help {
+      font-size: 0.8rem;
+      color: var(--gray-500);
+      margin-top: 0.5rem;
+    }
+  </style>
+</head>
+<body>
+  <main class="py-5">
+    <div class="container" style="max-width:720px;">
+
+      <div class="mb-4" data-aos="fade-up">
+        <h1 class="fw-bold mb-1">Set up your business</h1>
+        <p class="text-secondary mb-0">
+          Tell us about your business so customers can find and book you.
+        </p>
+      </div>
+
+      <div class="card border-0 shadow-sm" data-aos="fade-up">
+        <div class="card-body p-4 p-md-5">
+          <div id="alert-slot"></div>
+
+          <form id="onboard-form" novalidate>
+
+            <!-- ─── Cover image upload ─────────────────── -->
+            <div class="mb-4" data-field="cover">
+              <label class="form-label small fw-semibold">Cover image</label>
+
+              <!-- Preview (hidden by default) -->
+              <div id="cover-preview-wrap" class="upload-preview d-none">
+                <img id="cover-preview-img" alt="Cover preview" />
+                <div id="cover-uploading" class="upload-overlay d-none">
+                  <div class="spinner-border spinner-border-sm text-primary"></div>
+                  <div>Uploading…</div>
+                  <div class="upload-progress">
+                    <div id="cover-progress-bar" class="upload-progress-bar"></div>
+                  </div>
+                </div>
+                <button type="button" id="cover-remove" class="remove-btn" aria-label="Remove image">
+                  <i class="bi bi-x-lg"></i>
+                </button>
+              </div>
+
+              <!-- Dropzone (shown by default) -->
+              <div id="cover-dropzone" class="upload-zone" tabindex="0" role="button"
+                   aria-label="Upload cover image">
+                <input type="file" id="cover-input" accept="image/jpeg,image/png,image/webp,image/gif" />
+                <i class="bi bi-cloud-arrow-up icon"></i>
+                <div class="fw-semibold">Drop an image here, or click to browse</div>
+                <div class="upload-help">JPG, PNG, WebP or GIF · max 5MB</div>
+              </div>
+
+              <div class="text-danger small mt-2 d-none field-error" id="cover-error">
+                Please upload a valid image under 5MB.
+              </div>
+              <input type="hidden" id="cover_url" name="cover_url" />
+            </div>
+
+            <!-- ─── Rest of the form ────────────────────── -->
+            <div class="row g-3">
+              <div class="col-12">
+                <label for="name" class="form-label small fw-semibold">
+                  Business name *
+                </label>
+                <input id="name" class="form-control" required
+                       placeholder="e.g. Downtown Barbershop" />
+              </div>
+
+              <div class="col-md-6">
+                <label for="category" class="form-label small fw-semibold">
+                  Category *
+                </label>
+                <select id="category" class="form-select" required>
+                  <option value="">Choose…</option>
+                  <option value="salon">Salon</option>
+                  <option value="barber">Barber</option>
+                  <option value="clinic">Clinic</option>
+                  <option value="photographer">Photographer</option>
+                  <option value="consultant">Consultant</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+
+              <div class="col-md-6">
+                <label for="phone" class="form-label small fw-semibold">Phone</label>
+                <input id="phone" class="form-control" placeholder="+234 801 234 5678" />
+              </div>
+
+              <div class="col-12">
+                <label for="description" class="form-label small fw-semibold">
+                  Description
+                </label>
+                <textarea id="description" class="form-control" rows="3"
+                          placeholder="A sentence or two about what makes you unique…"></textarea>
+              </div>
+
+              <div class="col-12">
+                <label for="address_line1" class="form-label small fw-semibold">
+                  Address
+                </label>
+                <input id="address_line1" class="form-control" placeholder="123 Main St" />
+              </div>
+
+              <div class="col-md-5">
+                <label for="city" class="form-label small fw-semibold">City</label>
+                <input id="city" class="form-control" placeholder="Lagos" />
+              </div>
+              <div class="col-md-4">
+                <label for="state" class="form-label small fw-semibold">
+                  State
+                </label>
+                <input id="state" class="form-control" placeholder="Lagos" />
+              </div>
+              <div class="col-md-3">
+                <label for="postal_code" class="form-label small fw-semibold">
+                  Postal code
+                </label>
+                <input id="postal_code" class="form-control" placeholder="100001" />
+              </div>
+
+              <div class="col-md-6">
+                <label for="country" class="form-label small fw-semibold">
+                  Country
+                </label>
+                <input id="country" class="form-control" maxlength="2"
+                       placeholder="NG" style="text-transform:uppercase;" />
+              </div>
+
+              <div class="col-md-6">
+                <label for="timezone" class="form-label small fw-semibold">
+                  Timezone
+                </label>
+                <select id="timezone" class="form-select">
+                  <option value="Africa/Lagos" selected>Africa/Lagos (WAT)</option>
+                  <option value="Africa/Accra">Africa/Accra (GMT)</option>
+                  <option value="Africa/Nairobi">Africa/Nairobi (EAT)</option>
+                  <option value="Africa/Cairo">Africa/Cairo (EET)</option>
+                  <option value="Europe/London">Europe/London</option>
+                  <option value="America/New_York">America/New_York</option>
+                  <option value="UTC">UTC</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="d-flex gap-2 mt-4">
+              <button type="submit" id="submit-btn"
+                      class="btn btn-primary btn-lg flex-grow-1">
+                <i class="bi bi-check-circle me-2"></i>Create business
+              </button>
+              <a href="/dashboard.html" class="btn btn-outline-secondary btn-lg">
+                Skip for now
+              </a>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script type="module">
+    import { renderLayout } from '/js/layout.js';
+    import { requireAuth, auth, createMyBusiness, $, toast } from '/js/api.js';
+
+    renderLayout();
+
+    if (!requireAuth()) throw new Error('redirected');
+    if (auth.user.role !== 'business_owner' && auth.user.role !== 'admin') {
+      location.href = '/my-bookings.html';
+    }
+
+    // ═══════════════════════════════════════════════════
+    // IMAGE UPLOAD WIDGET
+    // ═══════════════════════════════════════════════════
+    const MAX_BYTES = 5 * 1024 * 1024;
+    const ALLOWED   = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+
+    const dz       = document.getElementById('cover-dropzone');
+    const input    = document.getElementById('cover-input');
+    const previewWrap = document.getElementById('cover-preview-wrap');
+    const previewImg  = document.getElementById('cover-preview-img');
+    const uploading   = document.getElementById('cover-uploading');
+    const progressBar = document.getElementById('cover-progress-bar');
+    const removeBtn   = document.getElementById('cover-remove');
+    const hiddenUrl   = document.getElementById('cover_url');
+    const errorEl     = document.getElementById('cover-error');
+
+    // Click anywhere in the dropzone opens the file picker
+    dz.addEventListener('click', () => input.click());
+    dz.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); }
+    });
+
+    // Drag & drop
+    ['dragenter', 'dragover'].forEach(evt =>
+      dz.addEventListener(evt, (e) => {
+        e.preventDefault();
+        dz.classList.add('dragover');
+      })
+    );
+    ['dragleave', 'drop'].forEach(evt =>
+      dz.addEventListener(evt, (e) => {
+        e.preventDefault();
+        dz.classList.remove('dragover');
+      })
+    );
+    dz.addEventListener('drop', (e) => {
+      const file = e.dataTransfer?.files?.[0];
+      if (file) handleFile(file);
+    });
+
+    // File picker
+    input.addEventListener('change', (e) => {
+      const file = e.target.files?.[0];
+      if (file) handleFile(file);
+    });
+
+    // Remove
+    removeBtn.addEventListener('click', () => {
+      hiddenUrl.value = '';
+      previewImg.src = '';
+      previewWrap.classList.add('d-none');
+      dz.classList.remove('d-none');
+      input.value = '';
+      errorEl.classList.add('d-none');
+    });
+
+    // ── Client-side compress (resize + re-encode) ─────
+    async function compressImage(file, { maxDim = 1600, quality = 0.85 } = {}) {
+      // Skip compression for GIFs (animation would be lost)
+      if (file.type === 'image/gif') return file;
+
+      const bitmap = await createImageBitmap(file);
+      const { width, height } = bitmap;
+      const scale = Math.min(1, maxDim / Math.max(width, height));
+      const w = Math.round(width * scale);
+      const h = Math.round(height * scale);
+
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(bitmap, 0, 0, w, h);
+
+      const blob = await new Promise((resolve, reject) => {
+        canvas.toBlob(
+          (b) => (b ? resolve(b) : reject(new Error('toBlob failed'))),
+          'image/jpeg',
+          quality,
+        );
+      });
+
+      // Preserve the original filename for the server
+      return new File([blob], file.name.replace(/\.\w+$/, '.jpg'), {
+        type: 'image/jpeg',
+      });
+    }
+
+    // ── Upload to backend ─────────────────────────────
+    async function uploadImage(file) {
+      const form = new FormData();
+      form.append('file', file);
+
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/uploads/image');
+        xhr.setRequestHeader('Authorization', `Bearer ${auth.token}`);
+
+        xhr.upload.addEventListener('progress', (e) => {
+          if (e.lengthComputable) {
+            const pct = Math.round((e.loaded / e.total) * 100);
+            progressBar.style.width = `${pct}%`;
+          }
+        });
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try { resolve(JSON.parse(xhr.responseText)); }
+            catch { reject(new Error('Invalid server response')); }
+          } else {
+            let msg = `Upload failed (${xhr.status})`;
+            try { msg = JSON.parse(xhr.responseText).message || msg; } catch {}
+            reject(new Error(msg));
+          }
+        };
+        xhr.onerror = () => reject(new Error('Network error during upload'));
+        xhr.send(form);
+      });
+    }
+
+    // ── Orchestration ─────────────────────────────────
+    async function handleFile(file) {
+      errorEl.classList.add('d-none');
+
+      // Validate type
+      if (!ALLOWED.includes(file.type)) {
+        errorEl.textContent = 'Please choose a JPG, PNG, WebP or GIF image.';
+        errorEl.classList.remove('d-none');
+        return;
+      }
+      // Validate size
+      if (file.size > MAX_BYTES) {
+        errorEl.textContent = `Image is too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Max is 5MB.`;
+        errorEl.classList.remove('d-none');
+        return;
+      }
+
+      // Show preview immediately using local blob URL
+      const localUrl = URL.createObjectURL(file);
+      previewImg.src = localUrl;
+      previewWrap.classList.remove('d-none');
+      dz.classList.add('d-none');
+      uploading.classList.remove('d-none');
+      progressBar.style.width = '0%';
+
+      try {
+        // Compress on the client
+        const compressed = await compressImage(file);
+        console.log(`[upload] ${(file.size / 1024).toFixed(0)}KB → ${(compressed.size / 1024).toFixed(0)}KB`);
+
+        // Upload
+        const { url } = await uploadImage(compressed);
+
+        // Store in hidden field for form submit
+        hiddenUrl.value = url;
+        // Swap preview to server URL (so it survives page reloads)
+        previewImg.src = url;
+        URL.revokeObjectURL(localUrl);
+
+      } catch (err) {
+        // Roll back to dropzone
+        previewWrap.classList.add('d-none');
+        dz.classList.remove('d-none');
+        errorEl.textContent = err.message || 'Upload failed. Try again.';
+        errorEl.classList.remove('d-none');
+        hiddenUrl.value = '';
+      } finally {
+        uploading.classList.add('d-none');
+      }
+    }
+
+    // ═══════════════════════════════════════════════════
+    // FORM SUBMIT
+    // ═══════════════════════════════════════════════════
+    const form      = $('#onboard-form');
+    const alertSlot = $('#alert-slot');
+    const btn       = $('#submit-btn');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      alertSlot.innerHTML = '';
+
+      const payload = {
+        name:          $('#name').value.trim(),
+        category:      $('#category').value,
+        phone:         $('#phone').value.trim() || undefined,
+        description:   $('#description').value.trim() || undefined,
+        cover_url:     hiddenUrl.value || undefined,     // ← server path or undefined
+        address_line1: $('#address_line1').value.trim() || undefined,
+        city:          $('#city').value.trim() || undefined,
+        state:         $('#state').value.trim() || undefined,
+        postal_code:   $('#postal_code').value.trim() || undefined,
+        country:       $('#country').value.trim().toUpperCase() || undefined,
+        timezone:      $('#timezone').value,
+        currency:      'NGN',
+      };
+
+      // Basic client-side validation
+      if (!payload.name) {
+        toast('Business name is required', 'error');
+        return;
+      }
+      if (!payload.category) {
+        toast('Please pick a category', 'error');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Creating…';
+
+      try {
+        const business = await createMyBusiness(payload);
+        alertSlot.innerHTML = `
+          <div class="alert alert-success d-flex align-items-center gap-2">
+            <i class="bi bi-check-circle-fill"></i>
+            <span>Business created! Redirecting to your dashboard…</span>
+          </div>`;
+        setTimeout(() => location.href = '/dashboard.html', 900);
+      } catch (err) {
+        alertSlot.innerHTML = `
+          <div class="alert alert-danger">
+            <i class="bi bi-exclamation-triangle me-1"></i>
+            ${err.message || 'Could not create business'}
+          </div>`;
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-check-circle me-2"></i>Create business';
+      }
+    });
+  </script>
+</body>
+</html>

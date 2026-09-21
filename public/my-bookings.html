@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My bookings — BookEasy</title>
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body>
+  <main class="py-5">
+    <div class="container">
+      <div class="mb-4" data-aos="fade-up">
+        <h1 class="fw-bold mb-1">My bookings</h1>
+        <p class="text-secondary mb-0">Your upcoming and past appointments</p>
+      </div>
+      <div id="app">
+        <div class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+      </div>
+    </div>
+  </main>
+
+  <script type="module">
+    import { renderLayout } from '/js/layout.js';
+    import {
+      requireAuth, listBookings, cancelBooking,
+      fmtDateOnly, fmtTime, fmtMoney, toast,
+    } from '/js/api.js';
+
+    renderLayout({ active: 'my-bookings' });
+
+    if (!requireAuth()) throw new Error('redirected');
+
+    const root = document.getElementById('app');
+    load();
+
+    async function load() {
+      try {
+        const data = await listBookings();   // no customerId — server infers from JWT
+        render(data.bookings ?? data);
+      } catch (err) {
+        root.innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
+      }
+    }
+
+    function render(bookings) {
+      if (!bookings.length) {
+        root.innerHTML = `
+          <div class="card border-0 shadow-sm" data-aos="fade-up">
+            <div class="card-body">
+              <div class="empty-state">
+                <div class="icon">📭</div>
+                <h4 class="fw-bold">No bookings yet</h4>
+                <p class="text-secondary">Start by browsing our top-rated businesses.</p>
+                <a href="/browse.html" class="btn btn-primary mt-2">
+                  <i class="bi bi-search me-2"></i>Browse businesses
+                </a>
+              </div>
+            </div>
+          </div>`;
+        return;
+      }
+
+      const now = new Date();
+      const upcoming = bookings.filter(b => new Date(b.start_time) >= now && b.status !== 'cancelled');
+      const past     = bookings.filter(b => new Date(b.start_time) < now || b.status === 'cancelled');
+
+      root.innerHTML = `
+        <h5 class="fw-bold mb-3" data-aos="fade-up">
+          Upcoming <span class="badge text-bg-primary">${upcoming.length}</span>
+        </h5>
+        ${upcoming.length
+          ? renderList(upcoming, true)
+          : '<p class="text-secondary mb-4">No upcoming bookings.</p>'}
+
+        <h5 class="fw-bold mb-3 mt-5" data-aos="fade-up">
+          Past & cancelled <span class="badge text-bg-secondary">${past.length}</span>
+        </h5>
+        ${past.length
+          ? renderList(past, false)
+          : '<p class="text-secondary">Nothing here yet.</p>'}
+      `;
+
+      document.querySelectorAll('[data-cancel]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          if (!confirm('Cancel this booking?')) return;
+          try {
+            await cancelBooking(btn.dataset.cancel, 'Cancelled by customer');
+            toast('Booking cancelled', 'success');
+            load();
+          } catch (err) {
+            toast(err.message, 'error');
+          }
+        });
+      });
+    }
+
+    function renderList(bookings, showCancel) {
+      return `<div class="row g-3 mb-4">${
+        bookings.map((b, i) => `
+          <div class="col-12" data-aos="fade-up" data-aos-delay="${i * 40}">
+            <div class="card border-0 shadow-sm">
+              <div class="card-body d-flex align-items-center gap-3 flex-wrap">
+                <div class="rounded-3 bg-primary bg-opacity-10 text-primary d-flex align-items-center justify-content-center"
+                     style="width:56px;height:56px;font-size:1.5rem;">
+                  <i class="bi bi-scissors"></i>
+                </div>
+                <div class="flex-grow-1">
+                  <h6 class="fw-bold mb-1">Haircut</h6>
+                  <div class="text-secondary small">
+                    <i class="bi bi-calendar-event me-1"></i>
+                    ${fmtDateOnly(b.start_time)}
+                    <span class="mx-2">·</span>
+                    <i class="bi bi-clock me-1"></i>
+                    ${fmtTime(b.start_time)} – ${fmtTime(b.end_time)}
+                  </div>
+                </div>
+                <div class="text-end">
+                  <div class="fw-bold fs-5">${fmtMoney(b.total_amount)}</div>
+                  <span class="badge ${
+                    b.status === 'confirmed' ? 'text-bg-success' :
+                    b.status === 'cancelled' ? 'text-bg-danger' :
+                    b.status === 'completed' ? 'text-bg-info' : 'text-bg-warning'
+                  } text-capitalize">${b.status}</span>
+                </div>
+                ${showCancel ? `
+                  <button class="btn btn-outline-danger btn-sm" data-cancel="${b.id}">
+                    <i class="bi bi-x-lg"></i>
+                  </button>
+                ` : ''}
+              </div>
+            </div>
+          </div>
+        `).join('')
+      }</div>`;
+    }
+  </script>
+</body>
+</html>

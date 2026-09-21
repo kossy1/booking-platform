@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BookEasy — Book anything, anywhere</title>
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body>
+  <main class="py-4 py-md-5">
+    <div class="container">
+
+      <!-- Hero -->
+      <section class="hero mb-5" data-aos="fade-up">
+        <img class="hero-img" alt=""
+             src="https://images.unsplash.com/photo-1521590832167-7bcbfaa6381f?w=1600&q=80&auto=format&fit=crop"
+             onerror="this.style.display='none'" />
+        <div class="row align-items-center">
+          <div class="col-lg-8 mx-auto text-center">
+            <h1 class="display-4 fw-bold mb-3">Book your next appointment in seconds</h1>
+            <p class="lead opacity-75 mb-4">
+              Salons, barbers, clinics, and consultants — book online 24/7. No phone calls. No waiting.
+            </p>
+            <div class="d-flex gap-3 justify-content-center flex-wrap">
+              <a href="/browse.html" class="btn btn-light btn-lg px-4 fw-semibold">
+                <i class="bi bi-search me-2"></i>Browse businesses
+              </a>
+              <a href="/register.html" class="btn btn-outline-light btn-lg px-4">
+                List your business
+              </a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Value props -->
+      <div class="row g-4 mb-5">
+        <div class="col-md-4" data-aos="fade-up" data-aos-delay="0">
+          <div class="card h-100 border-0 shadow-sm p-4">
+            <div class="icon-wrap bg-primary bg-opacity-10 text-primary mb-3"
+                 style="width:48px; height:48px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:1.4rem;">
+              <i class="bi bi-lightning-charge-fill"></i>
+            </div>
+            <h5 class="fw-bold">Instant booking</h5>
+            <p class="text-secondary mb-0">Real-time availability. Pick a slot. Confirmed in seconds.</p>
+          </div>
+        </div>
+        <div class="col-md-4" data-aos="fade-up" data-aos-delay="100">
+          <div class="card h-100 border-0 shadow-sm p-4">
+            <div class="icon-wrap bg-primary bg-opacity-10 text-primary mb-3"
+                 style="width:48px; height:48px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:1.4rem;">
+              <i class="bi bi-shield-check"></i>
+            </div>
+            <h5 class="fw-bold">Trusted businesses</h5>
+            <p class="text-secondary mb-0">Verified profiles, real reviews, transparent pricing.</p>
+          </div>
+        </div>
+        <div class="col-md-4" data-aos="fade-up" data-aos-delay="200">
+          <div class="card h-100 border-0 shadow-sm p-4">
+            <div class="icon-wrap bg-primary bg-opacity-10 text-primary mb-3"
+                 style="width:48px; height:48px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:1.4rem;">
+              <i class="bi bi-bell-fill"></i>
+            </div>
+            <h5 class="fw-bold">Smart reminders</h5>
+            <p class="text-secondary mb-0">Email and SMS reminders so you never miss an appointment.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Featured businesses -->
+      <div class="d-flex justify-content-between align-items-end mb-4" data-aos="fade-up">
+        <div>
+          <h2 class="fw-bold mb-1">Featured businesses</h2>
+          <p class="text-secondary mb-0">Popular spots on BookEasy this week</p>
+        </div>
+        <a href="/browse.html" class="btn btn-outline-primary d-none d-md-inline-flex">
+          View all <i class="bi bi-arrow-right ms-2"></i>
+        </a>
+      </div>
+
+      <div id="featured" class="row g-4">
+        <div class="col-12 text-center py-5">
+          <div class="spinner-border text-primary" role="status"></div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <script type="module">
+    import { renderLayout } from '/js/layout.js';
+    import { DEMO } from '/js/api.js';
+
+    renderLayout();
+
+    const FEATURED = [
+      {
+        id: DEMO.businessId, name: 'Test Barbershop', category: 'Barber', city: 'New York',
+        rating: 4.9, reviews: 128,
+        img: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=800&q=80&auto=format&fit=crop',
+      },
+      {
+        id: 'demo-2', name: 'Glow Studio', category: 'Salon', city: 'Brooklyn',
+        rating: 4.7, reviews: 89,
+        img: 'https://images.unsplash.com/photo-1560066984-138dadb4c035?w=800&q=80&auto=format&fit=crop',
+      },
+      {
+        id: 'demo-3', name: 'Smile Dental', category: 'Clinic', city: 'Manhattan',
+        rating: 4.8, reviews: 203,
+        img: 'https://images.unsplash.com/photo-1629909613654-28e377c37b09?w=800&q=80&auto=format&fit=crop',
+      },
+      {
+        id: 'demo-4', name: 'Frame Photography', category: 'Photographer', city: 'Queens',
+        rating: 5.0, reviews: 42,
+        img: 'https://images.unsplash.com/photo-1554048612-b6a482bc67e5?w=800&q=80&auto=format&fit=crop',
+      },
+    ];
+
+    document.getElementById('featured').innerHTML = FEATURED.map((b, i) => `
+      <div class="col-sm-6 col-lg-3" data-aos="fade-up" data-aos-delay="${i * 80}">
+        <a href="/business.html?id=${b.id}" class="card business-card border-0 shadow-sm overflow-hidden">
+          <div class="business-card-cover">
+            <img src="${b.img}" alt="${b.name}" loading="lazy"
+                 onerror="this.parentElement.style.background='linear-gradient(135deg,#667eea,#764ba2)'" />
+            <div class="overlay"></div>
+            <span class="badge text-bg-light position-absolute top-0 end-0 m-2">${b.category}</span>
+          </div>
+          <div class="card-body">
+            <h6 class="fw-bold mb-1">${b.name}</h6>
+            <p class="text-secondary small mb-2">
+              <i class="bi bi-geo-alt"></i> ${b.city}
+            </p>
+            <div class="d-flex align-items-center gap-1 small">
+              <i class="bi bi-star-fill text-warning"></i>
+              <strong>${b.rating}</strong>
+              <span class="text-secondary">(${b.reviews})</span>
+            </div>
+          </div>
+        </a>
+      </div>
+    `).join('');
+  </script>
+</body>
+</html>

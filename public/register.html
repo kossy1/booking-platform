@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Create account — BookEasy</title>
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body>
+  <main class="py-5">
+    <div class="container">
+      <div class="card border-0 shadow-lg auth-card" data-aos="fade-up">
+        <div class="card-body p-4 p-md-5">
+          <div class="text-center mb-4">
+            <div class="d-inline-flex align-items-center justify-content-center rounded-circle bg-primary bg-opacity-10 text-primary mb-3"
+                 style="width:64px;height:64px;font-size:1.75rem;">
+              <i class="bi bi-person-plus"></i>
+            </div>
+            <h1 class="fw-bold h3 mb-1">Create your account</h1>
+            <p class="text-secondary mb-0">Book services or grow your business</p>
+          </div>
+
+          <div class="role-picker mb-4" role="radiogroup" aria-label="Account type">
+            <button type="button" class="role-option selected" data-role="customer" aria-pressed="true">
+              <span class="icon">👤</span>
+              <div class="fw-semibold small">Customer</div>
+              <div class="text-secondary" style="font-size:0.72rem;">I want to book services</div>
+            </button>
+            <button type="button" class="role-option" data-role="business_owner" aria-pressed="false">
+              <span class="icon">🏪</span>
+              <div class="fw-semibold small">Business</div>
+              <div class="text-secondary" style="font-size:0.72rem;">I offer services</div>
+            </button>
+          </div>
+
+          <div id="alert-slot"></div>
+
+          <form id="register-form" novalidate>
+            <div class="mb-3" data-field="full_name">
+              <label for="full_name" class="form-label small fw-semibold">Full name</label>
+              <div class="input-group">
+                <span class="input-group-text bg-white"><i class="bi bi-person text-secondary"></i></span>
+                <input id="full_name" name="full_name" type="text" class="form-control"
+                       autocomplete="name" placeholder="Jane Doe" required />
+              </div>
+              <div class="text-danger small mt-1 d-none field-error">Please enter your name.</div>
+            </div>
+
+            <div class="mb-3" data-field="email">
+              <label for="email" class="form-label small fw-semibold">Email</label>
+              <div class="input-group">
+                <span class="input-group-text bg-white"><i class="bi bi-envelope text-secondary"></i></span>
+                <input id="email" name="email" type="email" class="form-control"
+                       autocomplete="email" placeholder="you@example.com" required />
+              </div>
+              <div class="text-danger small mt-1 d-none field-error">Please enter a valid email address.</div>
+            </div>
+
+            <div class="mb-3" data-field="phone" id="phone-group">
+              <label for="phone" class="form-label small fw-semibold">
+                Phone <span class="text-secondary fw-normal">(optional)</span>
+              </label>
+              <div class="input-group">
+                <span class="input-group-text bg-white"><i class="bi bi-telephone text-secondary"></i></span>
+                <input id="phone" name="phone" type="tel" class="form-control"
+                       autocomplete="tel" placeholder="+1 555 123 4567" />
+              </div>
+              <div class="text-danger small mt-1 d-none field-error">Please enter a valid phone number.</div>
+            </div>
+
+            <div class="mb-3" data-field="password">
+              <label for="password" class="form-label small fw-semibold">Password</label>
+              <div class="input-group">
+                <span class="input-group-text bg-white"><i class="bi bi-lock text-secondary"></i></span>
+                <input id="password" name="password" type="password" class="form-control"
+                       autocomplete="new-password" placeholder="At least 8 characters" required />
+              </div>
+              <div class="password-strength"><div class="password-strength-fill" id="strength-fill"></div></div>
+              <div class="text-secondary small mt-1" id="strength-label">
+                Use 8+ characters with letters and numbers.
+              </div>
+              <div class="text-danger small mt-1 d-none field-error">Password must be at least 8 characters.</div>
+            </div>
+
+            <div class="mb-3" data-field="confirm">
+              <label for="confirm" class="form-label small fw-semibold">Confirm password</label>
+              <div class="input-group">
+                <span class="input-group-text bg-white"><i class="bi bi-lock-fill text-secondary"></i></span>
+                <input id="confirm" name="confirm" type="password" class="form-control"
+                       autocomplete="new-password" placeholder="Repeat password" required />
+              </div>
+              <div class="text-danger small mt-1 d-none field-error">Passwords don't match.</div>
+            </div>
+
+            <div class="mb-4">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="terms" required />
+                <label class="form-check-label small" for="terms">
+                  I agree to the <a href="#" class="text-decoration-none">Terms</a> and
+                  <a href="#" class="text-decoration-none">Privacy Policy</a>
+                </label>
+              </div>
+              <div class="text-danger small mt-1 d-none" id="terms-error">You must accept the terms.</div>
+            </div>
+
+            <button type="submit" id="submit-btn" class="btn btn-primary w-100 btn-lg fw-semibold">
+              <i class="bi bi-person-plus me-2"></i>Create account
+            </button>
+          </form>
+
+          <p class="text-center small text-secondary mt-4 mb-0">
+            Already have an account?
+            <a href="/login.html" class="fw-semibold text-decoration-none">Sign in</a>
+          </p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script type="module">
+    import { renderLayout } from '/js/layout.js';
+    import { register, auth, $, $$, toast } from '/js/api.js';
+
+    renderLayout();
+
+    if (auth.isLoggedIn) location.href = '/my-bookings.html';
+
+    let role = 'customer';
+
+    const form       = $('#register-form');
+    const submitBtn  = $('#submit-btn');
+    const alertSlot  = $('#alert-slot');
+    const $name      = $('#full_name');
+    const $email     = $('#email');
+    const $phone     = $('#phone');
+    const $password  = $('#password');
+    const $confirm   = $('#confirm');
+    const $terms     = $('#terms');
+    const $strengthFill  = $('#strength-fill');
+    const $strengthLabel = $('#strength-label');
+
+    // ── Role picker ────────────────────────────────────
+    $$('.role-option').forEach(btn => {
+      btn.addEventListener('click', () => {
+        $$('.role-option').forEach(b => {
+          b.classList.remove('selected');
+          b.setAttribute('aria-pressed', 'false');
+        });
+        btn.classList.add('selected');
+        btn.setAttribute('aria-pressed', 'true');
+        role = btn.dataset.role;
+
+        const $phoneGroup = $('#phone-group');
+        if (role === 'business_owner') {
+          $phone.setAttribute('required', '');
+          $phoneGroup.querySelector('label').innerHTML =
+            'Phone <span class="text-secondary fw-normal">(for customer contact)</span>';
+        } else {
+          $phone.removeAttribute('required');
+          $phoneGroup.querySelector('label').innerHTML =
+            'Phone <span class="text-secondary fw-normal">(optional)</span>';
+        }
+      });
+    });
+
+    // ── Password strength ──────────────────────────────
+    $password.addEventListener('input', () => {
+      const v = $password.value;
+      let score = 0;
+      if (v.length >= 8) score++;
+      if (/[A-Z]/.test(v) && /[a-z]/.test(v)) score++;
+      if (/\d/.test(v)) score++;
+      if (/[^A-Za-z0-9]/.test(v)) score++;
+
+      const cls = score <= 1 ? 'weak' : score <= 3 ? 'medium' : 'strong';
+      $strengthFill.className = 'password-strength-fill ' + (v ? cls : '');
+
+      $strengthLabel.textContent = !v
+        ? 'Use 8+ characters with letters and numbers.'
+        : cls === 'weak'   ? 'Weak — add more variety.'
+        : cls === 'medium' ? 'Okay — add symbols for strength.'
+        : 'Strong password.';
+    });
+
+    // ── Validation ─────────────────────────────────────
+    function setError(fieldName, on) {
+      const group = form.querySelector(`[data-field="${fieldName}"]`);
+      if (!group) return;
+      group.querySelector('.field-error')?.classList.toggle('d-none', !on);
+      group.querySelector('input, select')?.classList.toggle('is-invalid', on);
+    }
+
+    function validate() {
+      let ok = true;
+
+      if (!$name.value.trim())                                 { setError('full_name', true); ok = false; } else setError('full_name', false);
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test($email.value))    { setError('email', true);     ok = false; } else setError('email', false);
+
+      if (role === 'business_owner' && !$phone.value.trim())   { setError('phone', true);     ok = false; } else setError('phone', false);
+
+      if ($password.value.length < 8)                          { setError('password', true);  ok = false; } else setError('password', false);
+      if ($password.value !== $confirm.value)                  { setError('confirm', true);   ok = false; } else setError('confirm', false);
+
+      $('#terms-error').classList.toggle('d-none', $terms.checked);
+      if (!$terms.checked) ok = false;
+
+      return ok;
+    }
+
+    ['full_name', 'email', 'phone', 'password', 'confirm'].forEach(name => {
+      form.elements[name]?.addEventListener('blur', validate);
+    });
+    $confirm.addEventListener('input', validate);
+    $terms.addEventListener('change', validate);
+
+    // ── Submit ─────────────────────────────────────────
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      alertSlot.innerHTML = '';
+
+      if (!validate()) {
+        toast('Please fix the errors above', 'error');
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Creating account…';
+
+      const payload = {
+        fullName: $name.value.trim(),
+        email: $email.value.trim().toLowerCase(),
+        phone: $phone.value.trim() || null,
+        password: $password.value,
+        role,
+      };
+
+      try {
+        const res = await register(payload);
+
+        auth.save({
+          accessToken:  res.accessToken,
+          refreshToken: res.refreshToken,
+          user:         res.user,
+        });
+
+        alertSlot.innerHTML = `
+          <div class="alert alert-success d-flex align-items-start gap-2">
+            <i class="bi bi-check-circle-fill mt-1"></i>
+            <div>Account created! Redirecting…</div>
+          </div>`;
+
+        setTimeout(() => {
+          window.location.href = res.user.role === 'business_owner'
+            ? '/dashboard.html'
+            : '/my-bookings.html';
+        }, 700);
+
+      } catch (err) {
+        (err.data?.issues ?? []).forEach(i => i.path && setError(i.path, true));
+
+        alertSlot.innerHTML = `
+          <div class="alert alert-danger">
+            <i class="bi bi-exclamation-triangle me-1"></i>
+            ${err.message || 'Registration failed.'}
+          </div>`;
+
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="bi bi-person-plus me-2"></i>Create account';
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,1012 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin — BookEasy</title>
+  <link rel="stylesheet" href="/css/app.css" />
+  <style>
+    .admin-shell { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
+    @media (max-width: 991.98px) { .admin-shell { grid-template-columns: 1fr; } }
+
+    .admin-sidebar {
+      background: #111827; color: #e5e7eb;
+      padding: 1.25rem 0; position: sticky; top: 0;
+      height: 100vh; overflow-y: auto;
+    }
+    @media (max-width: 991.98px) { .admin-sidebar { position: static; height: auto; } }
+
+    .admin-sidebar .brand {
+      padding: 0 1.25rem 1rem; font-weight: 800; font-size: 1.15rem;
+      color: #fff; letter-spacing: -0.01em;
+      display: flex; align-items: center; gap: 0.5rem;
+    }
+    .admin-sidebar .nav-section {
+      padding: 1rem 1.25rem 0.5rem; font-size: 0.7rem;
+      text-transform: uppercase; letter-spacing: 0.08em;
+      color: #6b7280; font-weight: 700;
+    }
+    .admin-sidebar .nav-item {
+      display: flex; align-items: center; gap: 0.75rem;
+      padding: 0.65rem 1.25rem; color: #d1d5db;
+      text-decoration: none; font-size: 0.925rem;
+      border-left: 3px solid transparent;
+      transition: all 0.15s ease; cursor: pointer;
+    }
+    .admin-sidebar .nav-item:hover { background: rgba(255,255,255,0.04); color: #fff; text-decoration: none; }
+    .admin-sidebar .nav-item.active { background: rgba(102,126,234,0.12); color: #fff; border-left-color: #667eea; font-weight: 600; }
+    .admin-sidebar .nav-item i { font-size: 1.05rem; width: 20px; }
+
+    .admin-main { background: #f8f9fc; padding: 1.75rem 2rem; }
+    @media (max-width: 575.98px) { .admin-main { padding: 1rem; } }
+
+    .admin-header { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.5rem; }
+    .admin-header h1 { font-size: 1.5rem; font-weight: 700; margin: 0; }
+
+    .stat-tile { background: #fff; border: 1px solid var(--bs-border-color); border-radius: var(--r-md); padding: 1.1rem 1.25rem; height: 100%; }
+    .stat-tile .label { font-size: 0.75rem; color: var(--gray-500); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; }
+    .stat-tile .value { font-size: 1.65rem; font-weight: 800; letter-spacing: -0.02em; }
+
+    .table-card { background: #fff; border: 1px solid var(--bs-border-color); border-radius: var(--r-md); overflow: hidden; }
+    .table-card .table { margin-bottom: 0; }
+    .table-card .table th {
+      background: #f9fafb; font-size: 0.72rem; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--gray-500); font-weight: 700; padding: 0.75rem 1rem;
+    }
+    .table-card .table td { padding: 0.75rem 1rem; vertical-align: middle; }
+
+    .avatar-sm {
+      width: 34px; height: 34px; border-radius: 50%;
+      background: rgba(102,126,234,0.12); color: #667eea;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 0.85rem;
+    }
+
+    .bulk-bar { position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%);
+                background: #111827; color: #fff; padding: 0.75rem 1.25rem;
+                border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,0.3);
+                display: flex; align-items: center; gap: 0.75rem; z-index: 1050; }
+    .bulk-bar select { background: #374151; color: #fff; border: none; }
+  </style>
+</head>
+<body style="background:#f8f9fc;">
+
+  <div class="admin-shell">
+    <aside class="admin-sidebar">
+      <div class="brand"><span>🛡️</span><span>BookEasy Admin</span></div>
+
+      <div class="nav-section">Overview</div>
+      <div class="nav-item active" data-view="overview"><i class="bi bi-speedometer2"></i>Dashboard</div>
+      <div class="nav-item" data-view="analytics"><i class="bi bi-graph-up"></i>Analytics</div>
+
+      <div class="nav-section">Manage</div>
+      <div class="nav-item" data-view="customers"><i class="bi bi-people"></i>Customers</div>
+      <div class="nav-item" data-view="businesses"><i class="bi bi-shop"></i>Businesses</div>
+      <div class="nav-item" data-view="bookings"><i class="bi bi-calendar-check"></i>Bookings</div>
+
+      <div class="nav-section">System</div>
+      <div class="nav-item" data-view="audit"><i class="bi bi-journal-text"></i>Audit log</div>
+
+      <div class="nav-section">Account</div>
+      <a class="nav-item" href="/"><i class="bi bi-house"></i>Back to site</a>
+      <div class="nav-item" id="logout-link"><i class="bi bi-box-arrow-right"></i>Sign out</div>
+    </aside>
+
+    <main class="admin-main" id="main">
+      <div class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+    </main>
+  </div>
+
+  <script type="module">
+    import { requireAuth, auth, api, $, $$, toast, fmtMoney, fmtMoneyShort, fmtDate, fmtDateOnly } from '/js/api.js';
+
+    // ── Auth gate ─────────────────────────────────────
+    if (!requireAuth()) throw new Error('redirected');
+    const IS_ADMIN   = auth.user.role === 'admin';
+    const IS_SUPPORT = auth.user.role === 'support';
+    if (!IS_ADMIN && !IS_SUPPORT) {
+      alert('Admin or support access only.');
+      location.href = '/';
+      throw new Error('not admin');
+    }
+
+    // ── Icons + Bootstrap ─────────────────────────────
+    if (!document.querySelector('link[href*="bootstrap-icons"]')) {
+      const l = document.createElement('link'); l.rel = 'stylesheet';
+      l.href = 'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css';
+      document.head.appendChild(l);
+    }
+    if (!document.querySelector('script[src*="bootstrap.bundle"]')) {
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js';
+      s.defer = true;
+      document.head.appendChild(s);
+    }
+
+    // ── State ─────────────────────────────────────────
+    let currentView = 'overview';
+    const $main = $('#main');
+
+    // ── Nav ───────────────────────────────────────────
+    $$('.nav-item[data-view]').forEach(el => {
+      el.addEventListener('click', () => {
+        const view = el.dataset.view;
+        if (view === currentView) return;
+        currentView = view;
+        $$('.nav-item').forEach(n => n.classList.remove('active'));
+        el.classList.add('active');
+        renderView(view);
+      });
+    });
+
+    $('#logout-link').addEventListener('click', () => auth.logout());
+
+    // ── Router ────────────────────────────────────────
+    function renderView(view) {
+      $main.innerHTML = `<div class="text-center py-5"><div class="spinner-border text-primary"></div></div>`;
+      if (view === 'overview')   renderOverview();
+      if (view === 'analytics')  renderAnalytics();
+      if (view === 'customers')  renderCustomers();
+      if (view === 'businesses') renderBusinesses();
+      if (view === 'bookings')   renderBookings();
+      if (view === 'audit')      renderAudit();
+    }
+
+    // ═══════════════════════════════════════════════════
+    // OVERVIEW
+    // ═══════════════════════════════════════════════════
+    async function renderOverview() {
+      try {
+        const s = await api('/admin/stats');
+
+        $main.innerHTML = `
+          ${IS_SUPPORT ? '<div class="alert alert-info"><i class="bi bi-info-circle me-1"></i>Support access: read-only.</div>' : ''}
+          <div class="admin-header">
+            <div><h1>Dashboard</h1><p class="text-secondary mb-0">Platform overview</p></div>
+            <button class="btn btn-outline-secondary btn-sm" id="refresh-stats">
+              <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+            </button>
+          </div>
+
+          <div class="row g-3 mb-4">
+            <div class="col-6 col-lg-3">
+              <div class="stat-tile">
+                <div class="label">Total users</div>
+                <div class="value">${s.users.total.toLocaleString()}</div>
+                <div class="small text-secondary mt-1">${s.users.customers} customers · ${s.users.businessOwners} owners</div>
+              </div>
+            </div>
+            <div class="col-6 col-lg-3">
+              <div class="stat-tile">
+                <div class="label">Businesses</div>
+                <div class="value">${s.businesses.total.toLocaleString()}</div>
+                <div class="small text-secondary mt-1">${s.businesses.active} active · ${s.businesses.pending} pending</div>
+              </div>
+            </div>
+            <div class="col-6 col-lg-3">
+              <div class="stat-tile">
+                <div class="label">Bookings</div>
+                <div class="value">${s.bookings.total.toLocaleString()}</div>
+                <div class="small text-secondary mt-1">${s.bookings.confirmed} confirmed · ${s.bookings.cancelled} cancelled</div>
+              </div>
+            </div>
+            <div class="col-6 col-lg-3">
+              <div class="stat-tile">
+                <div class="label">Revenue (30d)</div>
+                <div class="value">${fmtMoneyShort(s.bookings.revenue30d)}</div>
+                <div class="small text-secondary mt-1">${fmtMoney(s.bookings.revenue30d)} gross</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="row g-3">
+            <div class="col-lg-6">
+              <div class="table-card">
+                <div class="p-3 border-bottom"><h6 class="fw-bold mb-0">Recent signups</h6></div>
+                ${s.recent.signups.length ? `
+                  <table class="table table-hover mb-0"><tbody>
+                    ${s.recent.signups.map(u => `
+                      <tr>
+                        <td><div class="d-flex align-items-center gap-2">
+                          <div class="avatar-sm">${(u.full_name || u.email)[0].toUpperCase()}</div>
+                          <div>
+                            <div class="fw-semibold small">${u.full_name || '—'}</div>
+                            <div class="text-secondary small">${u.email}</div>
+                          </div>
+                        </div></td>
+                        <td class="text-end">
+                          <span class="badge text-bg-${u.role === 'business_owner' ? 'primary' : 'secondary'} text-capitalize">${u.role.replace('_',' ')}</span>
+                          <div class="text-secondary small mt-1">${fmtDate(u.created_at)}</div>
+                        </td>
+                      </tr>
+                    `).join('')}
+                  </tbody></table>
+                ` : '<div class="p-4 text-secondary small">No signups yet.</div>'}
+              </div>
+            </div>
+
+            <div class="col-lg-6">
+              <div class="table-card">
+                <div class="p-3 border-bottom"><h6 class="fw-bold mb-0">Recent bookings</h6></div>
+                ${s.recent.bookings.length ? `
+                  <table class="table table-hover mb-0"><tbody>
+                    ${s.recent.bookings.map(b => `
+                      <tr>
+                        <td>
+                          <div class="small fw-semibold">${fmtDateOnly(b.start_time)}</div>
+                          <div class="text-secondary small">#${b.id.slice(0, 8)}</div>
+                        </td>
+                        <td class="text-end">
+                          <span class="badge text-bg-${
+                            b.status === 'confirmed' ? 'success' :
+                            b.status === 'cancelled' ? 'danger'  :
+                            b.status === 'completed' ? 'info'    : 'warning'
+                          } text-capitalize">${b.status}</span>
+                          <div class="fw-semibold small mt-1">${fmtMoney(b.total_amount)}</div>
+                        </td>
+                      </tr>
+                    `).join('')}
+                  </tbody></table>
+                ` : '<div class="p-4 text-secondary small">No bookings yet.</div>'}
+              </div>
+            </div>
+          </div>
+        `;
+        $('#refresh-stats').addEventListener('click', renderOverview);
+      } catch (err) {
+        $main.innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
+      }
+    }
+
+    // ═══════════════════════════════════════════════════
+    // ANALYTICS
+    // ═══════════════════════════════════════════════════
+    async function renderAnalytics() {
+      $main.innerHTML = `
+        <div class="admin-header">
+          <div><h1>Analytics</h1><p class="text-secondary mb-0">Trends over time</p></div>
+          <select id="range-days" class="form-select" style="width:auto;">
+            <option value="7">Last 7 days</option>
+            <option value="30" selected>Last 30 days</option>
+            <option value="90">Last 90 days</option>
+            <option value="180">Last 180 days</option>
+          </select>
+        </div>
+
+        <div class="row g-3 mb-4">
+          <div class="col-lg-8">
+            <div class="table-card p-3">
+              <h6 class="fw-bold mb-3">Bookings & revenue</h6>
+              <div style="height:320px;"><canvas id="chart-daily"></canvas></div>
+            </div>
+          </div>
+          <div class="col-lg-4">
+            <div class="table-card p-3">
+              <h6 class="fw-bold mb-3">Revenue by category</h6>
+              <div style="height:320px;"><canvas id="chart-category"></canvas></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="table-card">
+          <div class="p-3 border-bottom"><h6 class="fw-bold mb-0">Top businesses</h6></div>
+          <div id="top-biz"></div>
+        </div>
+      `;
+
+      if (!window.Chart) {
+        await new Promise((resolve, reject) => {
+          const s = document.createElement('script');
+          s.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js';
+          s.onload = resolve; s.onerror = reject;
+          document.head.appendChild(s);
+        }).catch(() => toast('Chart.js failed to load', 'error'));
+      }
+
+      const load = async () => {
+        const days = $('#range-days').value;
+        const data = await api(`/admin/analytics?days=${days}`);
+
+        window.Chart?.getChart('chart-daily')?.destroy();
+        window.Chart?.getChart('chart-category')?.destroy();
+
+        if (window.Chart) {
+          new Chart(document.getElementById('chart-daily'), {
+            type: 'line',
+            data: {
+              labels: data.daily.map(d => d.day.slice(5)),
+              datasets: [
+                { label: 'Bookings', data: data.daily.map(d => d.bookings),
+                  borderColor: '#667eea', backgroundColor: 'rgba(102,126,234,0.1)',
+                  tension: 0.35, fill: true, yAxisID: 'y' },
+                { label: 'Revenue (₦)', data: data.daily.map(d => d.revenue),
+                  borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.1)',
+                  tension: 0.35, fill: true, yAxisID: 'y1' },
+              ],
+            },
+            options: {
+              responsive: true, maintainAspectRatio: false,
+              interaction: { mode: 'index', intersect: false },
+              scales: {
+                y:  { beginAtZero: true, position: 'left' },
+                y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false } },
+              },
+            },
+          });
+
+          new Chart(document.getElementById('chart-category'), {
+            type: 'doughnut',
+            data: {
+              labels: data.byCategory.map(c => c.category),
+              datasets: [{
+                data: data.byCategory.map(c => c.revenue),
+                backgroundColor: ['#667eea','#10b981','#f59e0b','#ef4444','#3b82f6','#8b5cf6'],
+              }],
+            },
+            options: {
+              responsive: true, maintainAspectRatio: false,
+              plugins: {
+                legend: { position: 'bottom' },
+                tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${fmtMoney(ctx.parsed)}` } },
+              },
+            },
+          });
+        }
+
+        $('#top-biz').innerHTML = data.topBusinesses.length ? `
+          <table class="table table-hover mb-0">
+            <thead><tr><th>Business</th><th>Category</th><th class="text-end">Bookings</th><th class="text-end">Revenue</th></tr></thead>
+            <tbody>
+              ${data.topBusinesses.map(b => `
+                <tr>
+                  <td><a href="/business.html?id=${b.id}" target="_blank">${b.name}</a></td>
+                  <td><span class="badge text-bg-light text-capitalize">${b.category}</span></td>
+                  <td class="text-end">${b.bookings}</td>
+                  <td class="text-end fw-semibold">${fmtMoney(b.revenue)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        ` : '<div class="p-4 text-secondary small">No data in this range.</div>';
+      };
+
+      $('#range-days').addEventListener('change', load);
+      load();
+    }
+
+    // ═══════════════════════════════════════════════════
+    // CUSTOMERS
+    // ═══════════════════════════════════════════════════
+    async function renderCustomers() {
+      $main.innerHTML = `
+        <div class="admin-header">
+          <div><h1>Customers</h1><p class="text-secondary mb-0">Manage user accounts</p></div>
+        </div>
+
+        <div class="table-card mb-3">
+          <div class="p-3">
+            <div class="row g-2">
+              <div class="col-md-5">
+                <div class="input-group">
+                  <span class="input-group-text bg-white"><i class="bi bi-search text-secondary"></i></span>
+                  <input id="user-q" class="form-control" placeholder="Search by name or email…" />
+                </div>
+              </div>
+              <div class="col-md-3">
+                <select id="user-role" class="form-select">
+                  <option value="">All roles</option>
+                  <option value="customer">Customer</option>
+                  <option value="business_owner">Business owner</option>
+                  <option value="staff">Staff</option>
+                  <option value="admin">Admin</option>
+                  <option value="support">Support</option>
+                </select>
+              </div>
+              <div class="col-md-3">
+                <select id="user-status" class="form-select">
+                  <option value="">All statuses</option>
+                  <option value="active">Active</option>
+                  <option value="deleted">Deleted</option>
+                </select>
+              </div>
+              <div class="col-md-1">
+                <button id="user-search" class="btn btn-primary w-100"><i class="bi bi-search"></i></button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="table-card">
+          <div id="users-table">
+            <div class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+          </div>
+        </div>
+      `;
+
+      const selected = new Set();
+
+      const load = async () => {
+        const params = new URLSearchParams();
+        const q = $('#user-q').value.trim();
+        if (q) params.set('q', q);
+        if ($('#user-role').value)   params.set('role', $('#user-role').value);
+        if ($('#user-status').value) params.set('status', $('#user-status').value);
+
+        const container = $('#users-table');
+        container.innerHTML = `<div class="text-center py-5"><div class="spinner-border text-primary"></div></div>`;
+
+        try {
+          const { users, pagination } = await api('/admin/users?' + params);
+          container.innerHTML = users.length ? `
+            <table class="table table-hover mb-0">
+              <thead>
+                <tr>
+                  ${IS_ADMIN ? '<th style="width:36px;"><input type="checkbox" id="select-all-users"></th>' : ''}
+                  <th>User</th>
+                  <th>Role</th>
+                  <th>Status</th>
+                  <th>Created</th>
+                  <th class="text-end">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${users.map(u => `
+                  <tr>
+                    ${IS_ADMIN ? `<td><input type="checkbox" class="row-check" data-id="${u.id}" ${selected.has(u.id) ? 'checked' : ''}></td>` : ''}
+                    <td>
+                      <div class="d-flex align-items-center gap-2">
+                        <div class="avatar-sm">${(u.full_name || u.email)[0].toUpperCase()}</div>
+                        <div>
+                          <div class="fw-semibold small">${u.full_name || '—'}</div>
+                          <div class="text-secondary small">${u.email}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <select class="form-select form-select-sm" data-role-for="${u.id}" style="min-width:150px;" ${!IS_ADMIN ? 'disabled' : ''}>
+                        ${['customer','business_owner','staff','admin','support'].map(r => `
+                          <option value="${r}" ${u.role === r ? 'selected' : ''}>${r.replace('_',' ')}</option>
+                        `).join('')}
+                      </select>
+                    </td>
+                    <td>
+                      ${u.deleted_at ? '<span class="badge text-bg-danger">Deleted</span>' : '<span class="badge text-bg-success">Active</span>'}
+                      ${u.business_count > 0 ? `<span class="badge text-bg-light ms-1">${u.business_count} biz</span>` : ''}
+                    </td>
+                    <td class="small text-secondary">${fmtDate(u.created_at)}</td>
+                    <td class="text-end">
+                      <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-secondary" data-view-user="${u.id}"><i class="bi bi-eye"></i></button>
+                        ${IS_ADMIN ? (u.deleted_at
+                          ? `<button class="btn btn-outline-success" data-restore="${u.id}"><i class="bi bi-arrow-counterclockwise"></i></button>`
+                          : `<button class="btn btn-outline-danger" data-delete="${u.id}"><i class="bi bi-trash"></i></button>`) : ''}
+                      </div>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+            <div class="p-3 border-top text-secondary small">Showing ${users.length} of ${pagination.total}</div>
+          ` : `<div class="p-5 text-center text-secondary"><i class="bi bi-inbox" style="font-size:2rem; opacity:0.4;"></i><p class="mb-0 mt-2">No users match your filters.</p></div>`;
+
+          // Wire up
+          container.querySelectorAll('[data-role-for]').forEach(sel => {
+            sel.addEventListener('change', async (e) => {
+              try {
+                await api(`/admin/users/${sel.dataset.roleFor}`, {
+                  method: 'PATCH', body: JSON.stringify({ role: e.target.value }),
+                });
+                toast('Role updated', 'success');
+              } catch (err) { toast(err.message, 'error'); load(); }
+            });
+          });
+
+          container.querySelectorAll('[data-view-user]').forEach(b =>
+            b.addEventListener('click', () => showUserDetail(b.dataset.viewUser)));
+          container.querySelectorAll('[data-delete]').forEach(b =>
+            b.addEventListener('click', () => deleteUser(b.dataset.delete, load)));
+          container.querySelectorAll('[data-restore]').forEach(b =>
+            b.addEventListener('click', () => restoreUser(b.dataset.restore, load)));
+
+          // Selection
+          const bar = $('#bulk-bar');
+          const updateBar = () => {
+            if (selected.size) { bar.classList.remove('d-none'); $('#bulk-count').textContent = `${selected.size} selected`; }
+            else bar.classList.add('d-none');
+          };
+          container.querySelectorAll('.row-check').forEach(cb => {
+            cb.addEventListener('change', () => {
+              if (cb.checked) selected.add(cb.dataset.id); else selected.delete(cb.dataset.id);
+              updateBar();
+            });
+          });
+          $('#select-all-users')?.addEventListener('change', e => {
+            const c = e.target.checked;
+            container.querySelectorAll('.row-check').forEach(cb => {
+              cb.checked = c;
+              if (c) selected.add(cb.dataset.id); else selected.delete(cb.dataset.id);
+            });
+            updateBar();
+          });
+          updateBar();
+        } catch (err) {
+          container.innerHTML = `<div class="alert alert-danger m-3">${err.message}</div>`;
+        }
+      };
+
+      // Insert bulk bar once
+      if (!document.getElementById('bulk-bar')) {
+        document.body.insertAdjacentHTML('beforeend', `
+          <div id="bulk-bar" class="bulk-bar d-none">
+            <span id="bulk-count" class="text-white-50 small fw-semibold"></span>
+            <select id="bulk-action" class="form-select form-select-sm" style="width:auto;">
+              <option value="">Bulk action…</option>
+              <option value="suspend">Suspend</option>
+              <option value="restore">Restore</option>
+              <option value="set_role:customer">Set role: customer</option>
+              <option value="set_role:business_owner">Set role: business owner</option>
+              <option value="set_role:staff">Set role: staff</option>
+              <option value="set_role:support">Set role: support</option>
+            </select>
+            <button id="bulk-apply" class="btn btn-sm btn-primary">Apply</button>
+            <button id="bulk-clear" class="btn btn-sm btn-outline-light">Cancel</button>
+          </div>
+        `);
+        $('#bulk-apply').addEventListener('click', async () => {
+          const val = $('#bulk-action').value;
+          if (!val) return toast('Pick an action', 'error');
+          const [action, role] = val.split(':');
+          if (!confirm(`Apply "${action}" to ${selected.size} user(s)?`)) return;
+          try {
+            const body = { userIds: [...selected], action };
+            if (role) body.role = role;
+            const res = await api('/admin/users/bulk', { method: 'POST', body: JSON.stringify(body) });
+            toast(`Updated ${res.updated}`, 'success');
+            selected.clear();
+            load();
+          } catch (err) { toast(err.message, 'error'); }
+        });
+        $('#bulk-clear').addEventListener('click', () => {
+          selected.clear(); load();
+        });
+      }
+
+      $('#user-search').addEventListener('click', load);
+      $('#user-q').addEventListener('keydown', e => e.key === 'Enter' && load());
+      $('#user-role').addEventListener('change', load);
+      $('#user-status').addEventListener('change', load);
+      load();
+    }
+
+    async function deleteUser(id, onDone) {
+      if (!confirm('Delete this user?')) return;
+      try {
+        await api(`/admin/users/${id}`, { method: 'DELETE' });
+        toast('User deleted', 'success'); onDone?.();
+      } catch (err) { toast(err.message, 'error'); }
+    }
+    async function restoreUser(id, onDone) {
+      try {
+        await api(`/admin/users/${id}/restore`, { method: 'POST' });
+        toast('User restored', 'success'); onDone?.();
+      } catch (err) { toast(err.message, 'error'); }
+    }
+    async function showUserDetail(id) {
+      try {
+        const u = await api(`/admin/users/${id}`);
+        document.getElementById('user-modal')?.remove();
+        document.body.insertAdjacentHTML('beforeend', `
+          <div class="modal fade" id="user-modal" tabindex="-1">
+            <div class="modal-dialog modal-lg modal-dialog-scrollable">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h5 class="modal-title">${u.full_name || 'User'}</h5>
+                  <button class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                  <dl class="row small mb-4">
+                    <dt class="col-sm-3 text-secondary">Email</dt><dd class="col-sm-9">${u.email}</dd>
+                    <dt class="col-sm-3 text-secondary">Role</dt><dd class="col-sm-9 text-capitalize">${u.role.replace('_',' ')}</dd>
+                    <dt class="col-sm-3 text-secondary">Phone</dt><dd class="col-sm-9">${u.phone || '—'}</dd>
+                    <dt class="col-sm-3 text-secondary">Joined</dt><dd class="col-sm-9">${fmtDate(u.created_at)}</dd>
+                  </dl>
+                  ${u.businesses?.length ? `
+                    <h6 class="fw-bold">Businesses (${u.businesses.length})</h6>
+                    <ul class="list-group mb-3">
+                      ${u.businesses.map(b => `
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                          <span>${b.name} <span class="badge text-bg-light text-capitalize ms-1">${b.status}</span></span>
+                          <a href="/business.html?id=${b.id}" target="_blank" class="small">View →</a>
+                        </li>
+                      `).join('')}
+                    </ul>` : ''}
+                </div>
+                <div class="modal-footer">
+                  <button class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        `);
+        new bootstrap.Modal('#user-modal').show();
+      } catch (err) { toast(err.message, 'error'); }
+    }
+
+    // ═══════════════════════════════════════════════════
+    // BUSINESSES
+    // ═══════════════════════════════════════════════════
+    async function renderBusinesses() {
+      $main.innerHTML = `
+        <div class="admin-header">
+          <div><h1>Businesses</h1><p class="text-secondary mb-0">Approve, suspend, or remove listings</p></div>
+        </div>
+
+        <div class="table-card mb-3">
+          <div class="p-3">
+            <div class="row g-2">
+              <div class="col-md-5">
+                <div class="input-group">
+                  <span class="input-group-text bg-white"><i class="bi bi-search text-secondary"></i></span>
+                  <input id="biz-q" class="form-control" placeholder="Search businesses…" />
+                </div>
+              </div>
+              <div class="col-md-3">
+                <select id="biz-category" class="form-select">
+                  <option value="">All categories</option>
+                  <option value="salon">Salon</option>
+                  <option value="barber">Barber</option>
+                  <option value="clinic">Clinic</option>
+                  <option value="photographer">Photographer</option>
+                  <option value="consultant">Consultant</option>
+                </select>
+              </div>
+              <div class="col-md-3">
+                <select id="biz-status" class="form-select">
+                  <option value="">All statuses</option>
+                  <option value="active">Active</option>
+                  <option value="pending">Pending</option>
+                  <option value="suspended">Suspended</option>
+                  <option value="closed">Closed</option>
+                </select>
+              </div>
+              <div class="col-md-1">
+                <button id="biz-search" class="btn btn-primary w-100"><i class="bi bi-search"></i></button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="table-card">
+          <div id="biz-table"><div class="text-center py-5"><div class="spinner-border text-primary"></div></div></div>
+        </div>
+      `;
+
+      const selectedBiz = new Set();
+
+      const load = async () => {
+        const params = new URLSearchParams();
+        const q = $('#biz-q').value.trim();
+        if (q) params.set('q', q);
+        if ($('#biz-category').value) params.set('category', $('#biz-category').value);
+        if ($('#biz-status').value)   params.set('status',   $('#biz-status').value);
+
+        const container = $('#biz-table');
+        container.innerHTML = `<div class="text-center py-5"><div class="spinner-border text-primary"></div></div>`;
+
+        try {
+          const { businesses } = await api('/admin/businesses?' + params);
+          container.innerHTML = businesses.length ? `
+            <table class="table table-hover mb-0">
+              <thead>
+                <tr>
+                  ${IS_ADMIN ? '<th style="width:36px;"><input type="checkbox" id="select-all-biz"></th>' : ''}
+                  <th>Business</th>
+                  <th>Owner</th>
+                  <th>Category</th>
+                  <th>Status</th>
+                  <th class="text-end">Bookings</th>
+                  <th class="text-end">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${businesses.map(b => `
+                  <tr>
+                    ${IS_ADMIN ? `<td><input type="checkbox" class="row-check-biz" data-id="${b.id}" ${selectedBiz.has(b.id) ? 'checked' : ''}></td>` : ''}
+                    <td>
+                      <div class="d-flex align-items-center gap-2">
+                        ${b.cover_url
+                          ? `<img src="${b.cover_url}" style="width:34px;height:34px;border-radius:6px;object-fit:cover;" onerror="this.style.display='none'">`
+                          : `<div class="avatar-sm">${b.name[0]}</div>`}
+                        <div>
+                          <div class="fw-semibold small">${b.name}</div>
+                          <div class="text-secondary small">${b.city || '—'}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="small text-secondary">${b.owner_email || '—'}</td>
+                    <td><span class="badge text-bg-light text-capitalize">${b.category}</span></td>
+                    <td>
+                      <select class="form-select form-select-sm" data-biz-status="${b.id}" style="min-width:130px;" ${!IS_ADMIN ? 'disabled' : ''}>
+                        ${['active','pending','suspended','closed'].map(s => `
+                          <option value="${s}" ${b.status === s ? 'selected' : ''}>${s}</option>
+                        `).join('')}
+                      </select>
+                    </td>
+                    <td class="text-end small">${b.booking_count}</td>
+                    <td class="text-end">
+                      <div class="btn-group btn-group-sm">
+                        <a href="/business.html?id=${b.id}" target="_blank" class="btn btn-outline-secondary"><i class="bi bi-box-arrow-up-right"></i></a>
+                        ${IS_ADMIN ? `<button class="btn btn-outline-danger" data-biz-delete="${b.id}"><i class="bi bi-trash"></i></button>` : ''}
+                      </div>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          ` : `<div class="p-5 text-center text-secondary"><i class="bi bi-shop" style="font-size:2rem; opacity:0.4;"></i><p class="mb-0 mt-2">No businesses match your filters.</p></div>`;
+
+          container.querySelectorAll('[data-biz-status]').forEach(sel => {
+            sel.addEventListener('change', async (e) => {
+              try {
+                await api(`/admin/businesses/${sel.dataset.bizStatus}/status`, {
+                  method: 'PATCH', body: JSON.stringify({ status: e.target.value }),
+                });
+                toast('Status updated', 'success');
+              } catch (err) { toast(err.message, 'error'); load(); }
+            });
+          });
+
+          container.querySelectorAll('[data-biz-delete]').forEach(btn => {
+            btn.addEventListener('click', async () => {
+              if (!confirm('Delete this business permanently?')) return;
+              try {
+                await api(`/admin/businesses/${btn.dataset.bizDelete}`, { method: 'DELETE' });
+                toast('Business deleted', 'success'); load();
+              } catch (err) { toast(err.message, 'error'); }
+            });
+          });
+
+          // Selection
+          const bar = $('#bulk-bar-biz');
+          const updateBar = () => {
+            if (selectedBiz.size) { bar.classList.remove('d-none'); $('#bulk-count-biz').textContent = `${selectedBiz.size} selected`; }
+            else bar.classList.add('d-none');
+          };
+          container.querySelectorAll('.row-check-biz').forEach(cb => {
+            cb.addEventListener('change', () => {
+              if (cb.checked) selectedBiz.add(cb.dataset.id); else selectedBiz.delete(cb.dataset.id);
+              updateBar();
+            });
+          });
+          $('#select-all-biz')?.addEventListener('change', e => {
+            const c = e.target.checked;
+            container.querySelectorAll('.row-check-biz').forEach(cb => {
+              cb.checked = c;
+              if (c) selectedBiz.add(cb.dataset.id); else selectedBiz.delete(cb.dataset.id);
+            });
+            updateBar();
+          });
+          updateBar();
+        } catch (err) {
+          container.innerHTML = `<div class="alert alert-danger m-3">${err.message}</div>`;
+        }
+      };
+
+      if (!document.getElementById('bulk-bar-biz')) {
+        document.body.insertAdjacentHTML('beforeend', `
+          <div id="bulk-bar-biz" class="bulk-bar d-none">
+            <span id="bulk-count-biz" class="text-white-50 small fw-semibold"></span>
+            <select id="bulk-action-biz" class="form-select form-select-sm" style="width:auto;">
+              <option value="">Bulk action…</option>
+              <option value="activate">Activate</option>
+              <option value="suspend">Suspend</option>
+              <option value="close">Close</option>
+              <option value="delete">Delete</option>
+            </select>
+            <button id="bulk-apply-biz" class="btn btn-sm btn-primary">Apply</button>
+            <button id="bulk-clear-biz" class="btn btn-sm btn-outline-light">Cancel</button>
+          </div>
+        `);
+        $('#bulk-apply-biz').addEventListener('click', async () => {
+          const action = $('#bulk-action-biz').value;
+          if (!action) return toast('Pick an action', 'error');
+          if (action === 'delete' && !confirm(`Delete ${selectedBiz.size} business(es)?`)) return;
+          else if (action !== 'delete' && !confirm(`Apply "${action}"?`)) return;
+          try {
+            const res = await api('/admin/businesses/bulk', {
+              method: 'POST', body: JSON.stringify({ businessIds: [...selectedBiz], action }),
+            });
+            toast(`Updated ${res.updated}`, 'success');
+            selectedBiz.clear(); load();
+          } catch (err) { toast(err.message, 'error'); }
+        });
+        $('#bulk-clear-biz').addEventListener('click', () => { selectedBiz.clear(); load(); });
+      }
+
+      $('#biz-search').addEventListener('click', load);
+      $('#biz-q').addEventListener('keydown', e => e.key === 'Enter' && load());
+      $('#biz-category').addEventListener('change', load);
+      $('#biz-status').addEventListener('change', load);
+      load();
+    }
+
+    // ═══════════════════════════════════════════════════
+    // BOOKINGS
+    // ═══════════════════════════════════════════════════
+    async function renderBookings() {
+      $main.innerHTML = `
+        <div class="admin-header">
+          <div><h1>Bookings</h1><p class="text-secondary mb-0">All bookings across the platform</p></div>
+        </div>
+
+        <div class="table-card mb-3">
+          <div class="p-3">
+            <div class="row g-2">
+              <div class="col-md-3">
+                <select id="bk-status" class="form-select">
+                  <option value="">All statuses</option>
+                  <option value="pending">Pending</option>
+                  <option value="confirmed">Confirmed</option>
+                  <option value="completed">Completed</option>
+                  <option value="cancelled">Cancelled</option>
+                  <option value="no_show">No show</option>
+                </select>
+              </div>
+              <div class="col-md-4"><input id="bk-from" type="date" class="form-control" /></div>
+              <div class="col-md-4"><input id="bk-to" type="date" class="form-control" /></div>
+              <div class="col-md-1"><button id="bk-search" class="btn btn-primary w-100"><i class="bi bi-search"></i></button></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="table-card">
+          <div id="bk-table"><div class="text-center py-5"><div class="spinner-border text-primary"></div></div></div>
+        </div>
+      `;
+
+      const load = async () => {
+        const params = new URLSearchParams();
+        if ($('#bk-status').value) params.set('status', $('#bk-status').value);
+        if ($('#bk-from').value)   params.set('from', new Date($('#bk-from').value).toISOString());
+        if ($('#bk-to').value)     params.set('to',   new Date($('#bk-to').value + 'T23:59:59').toISOString());
+
+        const container = $('#bk-table');
+        container.innerHTML = `<div class="text-center py-5"><div class="spinner-border text-primary"></div></div>`;
+
+        try {
+          const { bookings } = await api('/admin/bookings?' + params);
+          container.innerHTML = bookings.length ? `
+            <table class="table table-hover mb-0">
+              <thead>
+                <tr>
+                  <th>When</th><th>Business</th><th>Customer</th>
+                  <th>Status</th><th class="text-end">Amount</th><th class="text-end">Fee</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${bookings.map(b => `
+                  <tr>
+                    <td>
+                      <div class="small fw-semibold">${fmtDateOnly(b.start_time)}</div>
+                      <div class="text-secondary small">${fmtDate(b.start_time)}</div>
+                    </td>
+                    <td>
+                      <div class="small">${b.business_name || '—'}</div>
+                      <div class="text-secondary small">${b.owner_email || ''}</div>
+                    </td>
+                    <td>
+                      <div class="small">${b.customer_name || '—'}</div>
+                      <div class="text-secondary small">${b.customer_email || ''}</div>
+                    </td>
+                    <td>
+                      <span class="badge text-bg-${
+                        b.status === 'confirmed' ? 'success' :
+                        b.status === 'cancelled' ? 'danger'  :
+                        b.status === 'completed' ? 'info'    : 'warning'
+                      } text-capitalize">${b.status}</span>
+                    </td>
+                    <td class="text-end small fw-semibold">${fmtMoney(b.total_amount)}</td>
+                    <td class="text-end small text-secondary">${fmtMoney(b.platform_fee)}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          ` : `<div class="p-5 text-center text-secondary"><i class="bi bi-calendar-x" style="font-size:2rem; opacity:0.4;"></i><p class="mb-0 mt-2">No bookings match your filters.</p></div>`;
+        } catch (err) {
+          container.innerHTML = `<div class="alert alert-danger m-3">${err.message}</div>`;
+        }
+      };
+
+      $('#bk-search').addEventListener('click', load);
+      $('#bk-status').addEventListener('change', load);
+      load();
+    }
+
+    // ═══════════════════════════════════════════════════
+    // AUDIT LOG
+    // ═══════════════════════════════════════════════════
+    async function renderAudit() {
+      $main.innerHTML = `
+        <div class="admin-header">
+          <div><h1>Audit log</h1><p class="text-secondary mb-0">Every admin action, timestamped</p></div>
+        </div>
+
+        <div class="table-card mb-3">
+          <div class="p-3">
+            <div class="row g-2">
+              <div class="col-md-3">
+                <select id="audit-group" class="form-select">
+                  <option value="">All actions</option>
+                  <option value="user">User actions</option>
+                  <option value="business">Business actions</option>
+                  <option value="admin">Admin actions</option>
+                </select>
+              </div>
+              <div class="col-md-3">
+                <select id="audit-entity" class="form-select">
+                  <option value="">All entities</option>
+                  <option value="user">Users</option>
+                  <option value="business">Businesses</option>
+                  <option value="booking">Bookings</option>
+                  <option value="system">System</option>
+                </select>
+              </div>
+              <div class="col-md-3"><input id="audit-from" type="date" class="form-control" /></div>
+              <div class="col-md-3"><input id="audit-to" type="date" class="form-control" /></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="table-card">
+          <div id="audit-table"><div class="text-center py-5"><div class="spinner-border text-primary"></div></div></div>
+        </div>
+      `;
+
+      const load = async () => {
+        const params = new URLSearchParams();
+        if ($('#audit-group').value)  params.set('actionGroup', $('#audit-group').value);
+        if ($('#audit-entity').value) params.set('entityType', $('#audit-entity').value);
+        if ($('#audit-from').value)   params.set('from', new Date($('#audit-from').value).toISOString());
+        if ($('#audit-to').value)     params.set('to', new Date($('#audit-to').value + 'T23:59:59').toISOString());
+
+        const container = $('#audit-table');
+        container.innerHTML = `<div class="text-center py-5"><div class="spinner-border text-primary"></div></div>`;
+
+        try {
+          const { entries } = await api('/admin/audit?' + params);
+          const actionBadge = { user: 'text-bg-primary', business: 'text-bg-info', admin: 'text-bg-warning', booking: 'text-bg-secondary' };
+          container.innerHTML = entries.length ? `
+            <table class="table table-hover mb-0">
+              <thead>
+                <tr><th style="width:180px;">When</th><th>Actor</th><th>Action</th><th>Entity</th><th>Details</th></tr>
+              </thead>
+              <tbody>
+                ${entries.map(e => `
+                  <tr>
+                    <td class="small text-secondary">${fmtDate(e.created_at)}</td>
+                    <td class="small">${e.actor_name || e.actor_email || '—'}</td>
+                    <td><span class="badge ${actionBadge[e.action_group] || 'text-bg-secondary'}">${e.action}</span></td>
+                    <td class="small">${e.entity_type}${e.entity_id ? ` <code>${e.entity_id.slice(0,8)}</code>` : ''}</td>
+                    <td class="small text-secondary" style="max-width:340px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                      ${e.changes ? JSON.stringify(e.changes) : '—'}
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          ` : `<div class="p-5 text-center text-secondary"><i class="bi bi-journal-x" style="font-size:2rem; opacity:0.4;"></i><p class="mb-0 mt-2">No audit entries yet.</p></div>`;
+        } catch (err) {
+          container.innerHTML = `<div class="alert alert-danger m-3">${err.message}</div>`;
+        }
+      };
+
+      ['audit-group','audit-entity','audit-from','audit-to'].forEach(id =>
+        $('#' + id).addEventListener('change', load));
+      load();
+    }
+
+    // ── Boot ──────────────────────────────────────────
+    renderView('overview');
+  </script>
+</body>
+</html>
