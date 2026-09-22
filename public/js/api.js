@@ -1,5 +1,26 @@
 // public/js/api.js
-export const API_BASE = '';
+
+// ──────────────────────────────────────────────────
+// API BASE URL — resolves per environment
+// ──────────────────────────────────────────────────
+// Priority:
+//   1. window.__API_BASE__  (set inline in HTML for one-off overrides)
+//   2. localhost / 127.0.0.1  → same origin (no prefix)
+//   3. anything else           → deployed backend URL
+//
+// Change PROD_API_BASE to your actual Render/Railway URL.
+const PROD_API_BASE = 'https://booking-platform.onrender.com';  // ← EDIT THIS
+
+export const API_BASE = (() => {
+  if (typeof window !== 'undefined' && window.__API_BASE__) {
+    return String(window.__API_BASE__).replace(/\/$/, '');
+  }
+  const host = typeof window !== 'undefined' ? window.location.hostname : '';
+  if (host === 'localhost' || host === '127.0.0.1' || host === '') return '';
+  return PROD_API_BASE.replace(/\/$/, '');
+})();
+
+console.log('[api] API_BASE =', API_BASE || '(same-origin)');
 
 // ─── Currency config ─────────────────────────────────
 export const CURRENCY = {

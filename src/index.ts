@@ -24,19 +24,52 @@ import { startNotificationWorker } from './lib/notifications.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 
+// ─────────────────────────────────────────────────────────────
+// CORS origins — dev + production
+// ─────────────────────────────────────────────────────────────
+const ALLOWED_ORIGINS: string[] = [
+  'http://localhost:3001',
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'http://127.0.0.1:3001',
+  'https://booking-platform-blond-beta.vercel.app',
+  'https://booking-platform.onrender.com',
+];
+
+// Allow extra origins via env (comma-separated)
+if (process.env.CORS_ORIGINS) {
+  ALLOWED_ORIGINS.push(
+    ...process.env.CORS_ORIGINS.split(',').map((s) => s.trim()).filter(Boolean),
+  );
+}
+
 const app = Fastify({
   logger: { level: config.LOG_LEVEL },
-  trustProxy: true,
+  trustProxy: true,                 // needed behind Render/Vercel proxies
   bodyLimit: 1_048_576,
 });
 
 // ─── Plugins ──────────────────────────────────────────
-await app.register(helmet, { contentSecurityPolicy: false });
+await app.register(helmet, {
+  contentSecurityPolicy: false,     // API-only responses
+  crossOriginResourcePolicy: false, // allow images fetched cross-origin
+});
 
 await app.register(cors, {
-  origin: true,
+  origin: (origin, cb) => {
+    // Allow requests with no Origin header (curl, Postman, same-origin)
+    if (!origin) return cb(null, true);
+    if (ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+    // Allow ngrok/dev tunnels
+    if (/^https:\/\/[a-z0-9-]+\.ngrok(-free)?\.app$/.test(origin)) return cb(null, true);
+    if (/^https:\/\/[a-z0-9-]+\.trycloudflare\.com$/.test(origin)) return cb(null, true);
+    cb(new Error(`CORS: origin ${origin} not allowed`), false);
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  exposedHeaders: ['Content-Length'],
+  maxAge: 86400,
 });
 
 await app.register(rateLimit, {
@@ -44,13 +77,16 @@ await app.register(rateLimit, {
   timeWindow: '1 minute',
 });
 
+// Static files
 await app.register(fastifyStatic, {
   root: PUBLIC_DIR,
   prefix: '/',
   index: ['index.html'],
+  // Serves /uploads/... dynamically too
 });
 
 app.log.info({ publicDir: PUBLIC_DIR }, 'static root registered');
+app.log.info({ corsOrigins: ALLOWED_ORIGINS }, 'cors origins registered');
 
 // ─── Routes ───────────────────────────────────────────
 await app.register(healthRoutes);
@@ -140,8 +176,11 @@ process.on('unhandledRejection', (reason) => {
 
 // ─── Start ────────────────────────────────────────────
 try {
-  await app.listen({ port: config.PORT, host: '0.0.0.0' });
-  app.log.info(`Booking service ready on port ${config.PORT}`);
+  const port = config.PORT;                 // Render sets PORT automatically
+  await app.listen({ port, host: '0.0.0.0' });
+  app.log.info(`Booking service ready on port ${port}`);
+
+  // Start background worker after the server is up
   startNotificationWorker();
 } catch (err) {
   app.log.error({ err }, 'Failed to start server');
