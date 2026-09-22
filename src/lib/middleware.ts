@@ -2,18 +2,13 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { verifyAccessToken, type JwtPayload } from './auth.js';
 
-// ─────────────────────────────────────────────────────────────
-// Type augmentation: attach `user` to FastifyRequest
-// ─────────────────────────────────────────────────────────────
 declare module 'fastify' {
   interface FastifyRequest {
     user?: JwtPayload;
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-// requireAuth — customer audience
-// ─────────────────────────────────────────────────────────────
+// ─── requireAuth — customer audience ─────────────────
 export async function requireAuth(
   req: FastifyRequest,
   reply: FastifyReply,
@@ -25,7 +20,6 @@ export async function requireAuth(
       message: 'Missing or invalid Authorization header',
     });
   }
-
   try {
     req.user = verifyAccessToken(header.slice(7).trim(), 'customer');
   } catch {
@@ -36,9 +30,7 @@ export async function requireAuth(
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-// requireAdminAuth — admin audience (separate from customer)
-// ─────────────────────────────────────────────────────────────
+// ─── requireAdminAuth — admin audience ───────────────
 export async function requireAdminAuth(
   req: FastifyRequest,
   reply: FastifyReply,
@@ -50,7 +42,6 @@ export async function requireAdminAuth(
       message: 'Missing or invalid Authorization header',
     });
   }
-
   try {
     req.user = verifyAccessToken(header.slice(7).trim(), 'admin');
   } catch {
@@ -61,9 +52,7 @@ export async function requireAdminAuth(
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-// requireRole — role check (must be used after requireAuth)
-// ─────────────────────────────────────────────────────────────
+// ─── requireRole ─────────────────────────────────────
 export function requireRole(...roles: JwtPayload['role'][]) {
   return async (req: FastifyRequest, reply: FastifyReply): Promise<void> => {
     if (!req.user) {
@@ -84,16 +73,13 @@ export function requireRole(...roles: JwtPayload['role'][]) {
   };
 }
 
-// ─────────────────────────────────────────────────────────────
-// optionalAuth — attach user if token present, but never reject
-// ─────────────────────────────────────────────────────────────
+// ─── optionalAuth ────────────────────────────────────
 export async function optionalAuth(
   req: FastifyRequest,
   _reply: FastifyReply,
 ): Promise<void> {
   const header = req.headers.authorization;
   if (!header?.startsWith('Bearer ')) return;
-
   try {
     req.user = verifyAccessToken(header.slice(7).trim(), 'customer');
   } catch {

@@ -32,26 +32,45 @@
       text-decoration: none; font-size: 0.925rem;
       border-left: 3px solid transparent;
       transition: all 0.15s ease; cursor: pointer;
+      user-select: none;
     }
-    .admin-sidebar .nav-item:hover { background: rgba(255,255,255,0.04); color: #fff; text-decoration: none; }
-    .admin-sidebar .nav-item.active { background: rgba(102,126,234,0.12); color: #fff; border-left-color: #667eea; font-weight: 600; }
+    .admin-sidebar .nav-item:hover {
+      background: rgba(255,255,255,0.04); color: #fff; text-decoration: none;
+    }
+    .admin-sidebar .nav-item.active {
+      background: rgba(102,126,234,0.12); color: #fff;
+      border-left-color: #667eea; font-weight: 600;
+    }
     .admin-sidebar .nav-item i { font-size: 1.05rem; width: 20px; }
 
     .admin-main { background: #f8f9fc; padding: 1.75rem 2rem; }
     @media (max-width: 575.98px) { .admin-main { padding: 1rem; } }
 
-    .admin-header { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.5rem; }
+    .admin-header {
+      display: flex; justify-content: space-between; align-items: flex-start;
+      flex-wrap: wrap; gap: 1rem; margin-bottom: 1.5rem;
+    }
     .admin-header h1 { font-size: 1.5rem; font-weight: 700; margin: 0; }
 
-    .stat-tile { background: #fff; border: 1px solid var(--bs-border-color); border-radius: var(--r-md); padding: 1.1rem 1.25rem; height: 100%; }
-    .stat-tile .label { font-size: 0.75rem; color: var(--gray-500); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; }
+    .stat-tile {
+      background: #fff; border: 1px solid var(--bs-border-color);
+      border-radius: var(--r-md); padding: 1.1rem 1.25rem; height: 100%;
+    }
+    .stat-tile .label {
+      font-size: 0.75rem; color: var(--gray-500);
+      text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700;
+    }
     .stat-tile .value { font-size: 1.65rem; font-weight: 800; letter-spacing: -0.02em; }
 
-    .table-card { background: #fff; border: 1px solid var(--bs-border-color); border-radius: var(--r-md); overflow: hidden; }
+    .table-card {
+      background: #fff; border: 1px solid var(--bs-border-color);
+      border-radius: var(--r-md); overflow: hidden;
+    }
     .table-card .table { margin-bottom: 0; }
     .table-card .table th {
       background: #f9fafb; font-size: 0.72rem; text-transform: uppercase;
-      letter-spacing: 0.06em; color: var(--gray-500); font-weight: 700; padding: 0.75rem 1rem;
+      letter-spacing: 0.06em; color: var(--gray-500);
+      font-weight: 700; padding: 0.75rem 1rem;
     }
     .table-card .table td { padding: 0.75rem 1rem; vertical-align: middle; }
 
@@ -62,10 +81,12 @@
       font-weight: 700; font-size: 0.85rem;
     }
 
-    .bulk-bar { position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%);
-                background: #111827; color: #fff; padding: 0.75rem 1.25rem;
-                border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,0.3);
-                display: flex; align-items: center; gap: 0.75rem; z-index: 1050; }
+    .bulk-bar {
+      position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%);
+      background: #111827; color: #fff; padding: 0.75rem 1.25rem;
+      border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,0.3);
+      display: flex; align-items: center; gap: 0.75rem; z-index: 1050;
+    }
     .bulk-bar select { background: #374151; color: #fff; border: none; }
   </style>
 </head>
@@ -86,6 +107,7 @@
 
       <div class="nav-section">System</div>
       <div class="nav-item" data-view="audit"><i class="bi bi-journal-text"></i>Audit log</div>
+      <div class="nav-item" data-view="logins"><i class="bi bi-shield-exclamation"></i>Login attempts</div>
 
       <div class="nav-section">Account</div>
       <a class="nav-item" href="/"><i class="bi bi-house"></i>Back to site</a>
@@ -98,63 +120,114 @@
   </div>
 
   <script type="module">
-    import { requireAuth, auth, api, $, $$, toast, fmtMoney, fmtMoneyShort, fmtDate, fmtDateOnly } from '/js/api.js';
+    import {
+      requireAdminAuth,
+      adminAuth,
+      api,
+      $, $$,
+      toast,
+      fmtMoney, fmtMoneyShort, fmtDate, fmtDateOnly,
+    } from '/js/api.js';
 
-    // ── Auth gate ─────────────────────────────────────
-    if (!requireAuth()) throw new Error('redirected');
-    const IS_ADMIN   = auth.user.role === 'admin';
-    const IS_SUPPORT = auth.user.role === 'support';
-    if (!IS_ADMIN && !IS_SUPPORT) {
-      alert('Admin or support access only.');
-      location.href = '/';
-      throw new Error('not admin');
-    }
+    // ═══════════════════════════════════════════════════════
+    // BOOTSTRAP UI (icons + bootstrap JS) — do this first
+    // ═══════════════════════════════════════════════════════
+    (function loadAssets() {
+      if (!document.querySelector('link[href*="bootstrap-icons"]')) {
+        const l = document.createElement('link');
+        l.rel = 'stylesheet';
+        l.href = 'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css';
+        document.head.appendChild(l);
+      }
+      if (!document.querySelector('script[src*="bootstrap.bundle"]')) {
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js';
+        s.defer = true;
+        document.head.appendChild(s);
+      }
+    })();
 
-    // ── Icons + Bootstrap ─────────────────────────────
-    if (!document.querySelector('link[href*="bootstrap-icons"]')) {
-      const l = document.createElement('link'); l.rel = 'stylesheet';
-      l.href = 'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css';
-      document.head.appendChild(l);
-    }
-    if (!document.querySelector('script[src*="bootstrap.bundle"]')) {
-      const s = document.createElement('script');
-      s.src = 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js';
-      s.defer = true;
-      document.head.appendChild(s);
-    }
-
-    // ── State ─────────────────────────────────────────
-    let currentView = 'overview';
+    // ═══════════════════════════════════════════════════════
+    // STATE
+    // ═══════════════════════════════════════════════════════
     const $main = $('#main');
+    let currentView = 'overview';
+    const IS_ADMIN   = adminAuth.user?.role === 'admin';
+    const IS_SUPPORT = adminAuth.user?.role === 'support';
+    const SELECTED_USERS = new Set();
+    const SELECTED_BIZ   = new Set();
 
-    // ── Nav ───────────────────────────────────────────
-    $$('.nav-item[data-view]').forEach(el => {
-      el.addEventListener('click', () => {
-        const view = el.dataset.view;
-        if (view === currentView) return;
-        currentView = view;
-        $$('.nav-item').forEach(n => n.classList.remove('active'));
-        el.classList.add('active');
-        renderView(view);
+    // ═══════════════════════════════════════════════════════
+    // LOGGING
+    // ═══════════════════════════════════════════════════════
+    console.log('[admin] loaded',
+      { token: !!adminAuth.token, role: adminAuth.user?.role });
+
+    // ═══════════════════════════════════════════════════════
+    // AUTH GUARD — runs in parallel; redirects if needed.
+    // The sidebar is still wired so the click handlers exist.
+    // ═══════════════════════════════════════════════════════
+    if (!requireAdminAuth()) {
+      console.warn('[admin] not authenticated — redirect issued');
+    } else if (adminAuth.user?.role !== 'admin' && adminAuth.user?.role !== 'support') {
+      console.warn('[admin] wrong role:', adminAuth.user?.role);
+      adminAuth.clear();
+      location.href = '/admin-login.html';
+    } else {
+      // ─── Wire sidebar ───────────────────────────────
+      $$('.nav-item[data-view]').forEach((el) => {
+        el.addEventListener('click', (e) => {
+          e.preventDefault();
+          const view = el.dataset.view;
+          if (view === currentView) return;
+          currentView = view;
+          $$('.nav-item').forEach((n) => n.classList.remove('active'));
+          el.classList.add('active');
+          console.log('[admin] switch view →', view);
+          renderView(view);
+        });
       });
-    });
 
-    $('#logout-link').addEventListener('click', () => auth.logout());
+      // ─── Logout ─────────────────────────────────────
+      $('#logout-link').addEventListener('click', () => {
+        adminAuth.logout('/admin-login.html', '/auth/admin/logout');
+      });
 
-    // ── Router ────────────────────────────────────────
+      // ─── Boot ───────────────────────────────────────
+      renderView('overview');
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // ROUTER
+    // ═══════════════════════════════════════════════════════
     function renderView(view) {
       $main.innerHTML = `<div class="text-center py-5"><div class="spinner-border text-primary"></div></div>`;
-      if (view === 'overview')   renderOverview();
-      if (view === 'analytics')  renderAnalytics();
-      if (view === 'customers')  renderCustomers();
-      if (view === 'businesses') renderBusinesses();
-      if (view === 'bookings')   renderBookings();
-      if (view === 'audit')      renderAudit();
+      try {
+        if (view === 'overview')   return renderOverview();
+        if (view === 'analytics')  return renderAnalytics();
+        if (view === 'customers')  return renderCustomers();
+        if (view === 'businesses') return renderBusinesses();
+        if (view === 'bookings')   return renderBookings();
+        if (view === 'audit')      return renderAudit();
+        if (view === 'logins')     return renderLogins();
+      } catch (err) {
+        console.error('[admin] renderView error:', err);
+        $main.innerHTML = `<div class="alert alert-danger">${esc(err.message)}</div>`;
+      }
     }
 
-    // ═══════════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════
+    // HELPERS
+    // ═══════════════════════════════════════════════════════
+    function esc(s) {
+      return String(s ?? '').replace(/[&<>"']/g, (c) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+      }[c]));
+    }
+
+    // ═══════════════════════════════════════════════════════
     // OVERVIEW
-    // ═══════════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════
     async function renderOverview() {
       try {
         const s = await api('/admin/stats');
@@ -208,14 +281,14 @@
                     ${s.recent.signups.map(u => `
                       <tr>
                         <td><div class="d-flex align-items-center gap-2">
-                          <div class="avatar-sm">${(u.full_name || u.email)[0].toUpperCase()}</div>
+                          <div class="avatar-sm">${esc((u.full_name || u.email)[0].toUpperCase())}</div>
                           <div>
-                            <div class="fw-semibold small">${u.full_name || '—'}</div>
-                            <div class="text-secondary small">${u.email}</div>
+                            <div class="fw-semibold small">${esc(u.full_name || '—')}</div>
+                            <div class="text-secondary small">${esc(u.email)}</div>
                           </div>
                         </div></td>
                         <td class="text-end">
-                          <span class="badge text-bg-${u.role === 'business_owner' ? 'primary' : 'secondary'} text-capitalize">${u.role.replace('_',' ')}</span>
+                          <span class="badge text-bg-${u.role === 'business_owner' ? 'primary' : u.role === 'admin' ? 'danger' : u.role === 'support' ? 'warning' : 'secondary'} text-capitalize">${esc(u.role.replace('_',' '))}</span>
                           <div class="text-secondary small mt-1">${fmtDate(u.created_at)}</div>
                         </td>
                       </tr>
@@ -234,14 +307,14 @@
                       <tr>
                         <td>
                           <div class="small fw-semibold">${fmtDateOnly(b.start_time)}</div>
-                          <div class="text-secondary small">#${b.id.slice(0, 8)}</div>
+                          <div class="text-secondary small">#${esc(b.id.slice(0, 8))}</div>
                         </td>
                         <td class="text-end">
                           <span class="badge text-bg-${
                             b.status === 'confirmed' ? 'success' :
                             b.status === 'cancelled' ? 'danger'  :
                             b.status === 'completed' ? 'info'    : 'warning'
-                          } text-capitalize">${b.status}</span>
+                          } text-capitalize">${esc(b.status)}</span>
                           <div class="fw-semibold small mt-1">${fmtMoney(b.total_amount)}</div>
                         </td>
                       </tr>
@@ -252,15 +325,16 @@
             </div>
           </div>
         `;
-        $('#refresh-stats').addEventListener('click', renderOverview);
+        $('#refresh-stats')?.addEventListener('click', renderOverview);
       } catch (err) {
-        $main.innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
+        console.error('[admin] overview failed:', err);
+        $main.innerHTML = `<div class="alert alert-danger">${esc(err.message)}</div>`;
       }
     }
 
-    // ═══════════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════
     // ANALYTICS
-    // ═══════════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════
     async function renderAnalytics() {
       $main.innerHTML = `
         <div class="admin-header">
@@ -304,79 +378,84 @@
       }
 
       const load = async () => {
-        const days = $('#range-days').value;
-        const data = await api(`/admin/analytics?days=${days}`);
+        try {
+          const days = $('#range-days').value;
+          const data = await api(`/admin/analytics?days=${days}`);
 
-        window.Chart?.getChart('chart-daily')?.destroy();
-        window.Chart?.getChart('chart-category')?.destroy();
+          window.Chart?.getChart('chart-daily')?.destroy();
+          window.Chart?.getChart('chart-category')?.destroy();
 
-        if (window.Chart) {
-          new Chart(document.getElementById('chart-daily'), {
-            type: 'line',
-            data: {
-              labels: data.daily.map(d => d.day.slice(5)),
-              datasets: [
-                { label: 'Bookings', data: data.daily.map(d => d.bookings),
-                  borderColor: '#667eea', backgroundColor: 'rgba(102,126,234,0.1)',
-                  tension: 0.35, fill: true, yAxisID: 'y' },
-                { label: 'Revenue (₦)', data: data.daily.map(d => d.revenue),
-                  borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.1)',
-                  tension: 0.35, fill: true, yAxisID: 'y1' },
-              ],
-            },
-            options: {
-              responsive: true, maintainAspectRatio: false,
-              interaction: { mode: 'index', intersect: false },
-              scales: {
-                y:  { beginAtZero: true, position: 'left' },
-                y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false } },
+          if (window.Chart) {
+            new Chart(document.getElementById('chart-daily'), {
+              type: 'line',
+              data: {
+                labels: data.daily.map(d => d.day.slice(5)),
+                datasets: [
+                  { label: 'Bookings', data: data.daily.map(d => d.bookings),
+                    borderColor: '#667eea', backgroundColor: 'rgba(102,126,234,0.1)',
+                    tension: 0.35, fill: true, yAxisID: 'y' },
+                  { label: 'Revenue (₦)', data: data.daily.map(d => d.revenue),
+                    borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.1)',
+                    tension: 0.35, fill: true, yAxisID: 'y1' },
+                ],
               },
-            },
-          });
-
-          new Chart(document.getElementById('chart-category'), {
-            type: 'doughnut',
-            data: {
-              labels: data.byCategory.map(c => c.category),
-              datasets: [{
-                data: data.byCategory.map(c => c.revenue),
-                backgroundColor: ['#667eea','#10b981','#f59e0b','#ef4444','#3b82f6','#8b5cf6'],
-              }],
-            },
-            options: {
-              responsive: true, maintainAspectRatio: false,
-              plugins: {
-                legend: { position: 'bottom' },
-                tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${fmtMoney(ctx.parsed)}` } },
+              options: {
+                responsive: true, maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                scales: {
+                  y:  { beginAtZero: true, position: 'left' },
+                  y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false } },
+                },
               },
-            },
-          });
+            });
+
+            new Chart(document.getElementById('chart-category'), {
+              type: 'doughnut',
+              data: {
+                labels: data.byCategory.map(c => c.category),
+                datasets: [{
+                  data: data.byCategory.map(c => c.revenue),
+                  backgroundColor: ['#667eea','#10b981','#f59e0b','#ef4444','#3b82f6','#8b5cf6'],
+                }],
+              },
+              options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: {
+                  legend: { position: 'bottom' },
+                  tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${fmtMoney(ctx.parsed)}` } },
+                },
+              },
+            });
+          }
+
+          $('#top-biz').innerHTML = data.topBusinesses.length ? `
+            <table class="table table-hover mb-0">
+              <thead><tr><th>Business</th><th>Category</th><th class="text-end">Bookings</th><th class="text-end">Revenue</th></tr></thead>
+              <tbody>
+                ${data.topBusinesses.map(b => `
+                  <tr>
+                    <td><a href="/business.html?id=${encodeURIComponent(b.id)}" target="_blank">${esc(b.name)}</a></td>
+                    <td><span class="badge text-bg-light text-capitalize">${esc(b.category)}</span></td>
+                    <td class="text-end">${b.bookings}</td>
+                    <td class="text-end fw-semibold">${fmtMoney(b.revenue)}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          ` : '<div class="p-4 text-secondary small">No data in this range.</div>';
+        } catch (err) {
+          console.error('[admin] analytics failed:', err);
+          $('#top-biz').innerHTML = `<div class="alert alert-danger m-3">${esc(err.message)}</div>`;
         }
-
-        $('#top-biz').innerHTML = data.topBusinesses.length ? `
-          <table class="table table-hover mb-0">
-            <thead><tr><th>Business</th><th>Category</th><th class="text-end">Bookings</th><th class="text-end">Revenue</th></tr></thead>
-            <tbody>
-              ${data.topBusinesses.map(b => `
-                <tr>
-                  <td><a href="/business.html?id=${b.id}" target="_blank">${b.name}</a></td>
-                  <td><span class="badge text-bg-light text-capitalize">${b.category}</span></td>
-                  <td class="text-end">${b.bookings}</td>
-                  <td class="text-end fw-semibold">${fmtMoney(b.revenue)}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        ` : '<div class="p-4 text-secondary small">No data in this range.</div>';
       };
 
       $('#range-days').addEventListener('change', load);
       load();
     }
 
-    // ═══════════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════
     // CUSTOMERS
-    // ═══════════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════
     async function renderCustomers() {
       $main.innerHTML = `
         <div class="admin-header">
@@ -423,8 +502,6 @@
         </div>
       `;
 
-      const selected = new Set();
-
       const load = async () => {
         const params = new URLSearchParams();
         const q = $('#user-q').value.trim();
@@ -452,13 +529,13 @@
               <tbody>
                 ${users.map(u => `
                   <tr>
-                    ${IS_ADMIN ? `<td><input type="checkbox" class="row-check" data-id="${u.id}" ${selected.has(u.id) ? 'checked' : ''}></td>` : ''}
+                    ${IS_ADMIN ? `<td><input type="checkbox" class="row-check" data-id="${u.id}" ${SELECTED_USERS.has(u.id) ? 'checked' : ''}></td>` : ''}
                     <td>
                       <div class="d-flex align-items-center gap-2">
-                        <div class="avatar-sm">${(u.full_name || u.email)[0].toUpperCase()}</div>
+                        <div class="avatar-sm">${esc((u.full_name || u.email)[0].toUpperCase())}</div>
                         <div>
-                          <div class="fw-semibold small">${u.full_name || '—'}</div>
-                          <div class="text-secondary small">${u.email}</div>
+                          <div class="fw-semibold small">${esc(u.full_name || '—')}</div>
+                          <div class="text-secondary small">${esc(u.email)}</div>
                         </div>
                       </div>
                     </td>
@@ -489,7 +566,7 @@
             <div class="p-3 border-top text-secondary small">Showing ${users.length} of ${pagination.total}</div>
           ` : `<div class="p-5 text-center text-secondary"><i class="bi bi-inbox" style="font-size:2rem; opacity:0.4;"></i><p class="mb-0 mt-2">No users match your filters.</p></div>`;
 
-          // Wire up
+          // Role change
           container.querySelectorAll('[data-role-for]').forEach(sel => {
             sel.addEventListener('change', async (e) => {
               try {
@@ -501,6 +578,7 @@
             });
           });
 
+          // Actions
           container.querySelectorAll('[data-view-user]').forEach(b =>
             b.addEventListener('click', () => showUserDetail(b.dataset.viewUser)));
           container.querySelectorAll('[data-delete]').forEach(b =>
@@ -508,15 +586,20 @@
           container.querySelectorAll('[data-restore]').forEach(b =>
             b.addEventListener('click', () => restoreUser(b.dataset.restore, load)));
 
-          // Selection
+          // Selection wiring
           const bar = $('#bulk-bar');
           const updateBar = () => {
-            if (selected.size) { bar.classList.remove('d-none'); $('#bulk-count').textContent = `${selected.size} selected`; }
-            else bar.classList.add('d-none');
+            if (SELECTED_USERS.size) {
+              bar.classList.remove('d-none');
+              $('#bulk-count').textContent = `${SELECTED_USERS.size} selected`;
+            } else {
+              bar.classList.add('d-none');
+            }
           };
           container.querySelectorAll('.row-check').forEach(cb => {
             cb.addEventListener('change', () => {
-              if (cb.checked) selected.add(cb.dataset.id); else selected.delete(cb.dataset.id);
+              if (cb.checked) SELECTED_USERS.add(cb.dataset.id);
+              else SELECTED_USERS.delete(cb.dataset.id);
               updateBar();
             });
           });
@@ -524,17 +607,19 @@
             const c = e.target.checked;
             container.querySelectorAll('.row-check').forEach(cb => {
               cb.checked = c;
-              if (c) selected.add(cb.dataset.id); else selected.delete(cb.dataset.id);
+              if (c) SELECTED_USERS.add(cb.dataset.id);
+              else SELECTED_USERS.delete(cb.dataset.id);
             });
             updateBar();
           });
           updateBar();
         } catch (err) {
-          container.innerHTML = `<div class="alert alert-danger m-3">${err.message}</div>`;
+          console.error('[admin] customers failed:', err);
+          container.innerHTML = `<div class="alert alert-danger m-3">${esc(err.message)}</div>`;
         }
       };
 
-      // Insert bulk bar once
+      // Bulk bar (once)
       if (!document.getElementById('bulk-bar')) {
         document.body.insertAdjacentHTML('beforeend', `
           <div id="bulk-bar" class="bulk-bar d-none">
@@ -556,18 +641,19 @@
           const val = $('#bulk-action').value;
           if (!val) return toast('Pick an action', 'error');
           const [action, role] = val.split(':');
-          if (!confirm(`Apply "${action}" to ${selected.size} user(s)?`)) return;
+          if (!confirm(`Apply "${action}" to ${SELECTED_USERS.size} user(s)?`)) return;
           try {
-            const body = { userIds: [...selected], action };
+            const body = { userIds: [...SELECTED_USERS], action };
             if (role) body.role = role;
             const res = await api('/admin/users/bulk', { method: 'POST', body: JSON.stringify(body) });
             toast(`Updated ${res.updated}`, 'success');
-            selected.clear();
+            SELECTED_USERS.clear();
             load();
           } catch (err) { toast(err.message, 'error'); }
         });
         $('#bulk-clear').addEventListener('click', () => {
-          selected.clear(); load();
+          SELECTED_USERS.clear();
+          load();
         });
       }
 
@@ -591,6 +677,7 @@
         toast('User restored', 'success'); onDone?.();
       } catch (err) { toast(err.message, 'error'); }
     }
+
     async function showUserDetail(id) {
       try {
         const u = await api(`/admin/users/${id}`);
@@ -600,23 +687,24 @@
             <div class="modal-dialog modal-lg modal-dialog-scrollable">
               <div class="modal-content">
                 <div class="modal-header">
-                  <h5 class="modal-title">${u.full_name || 'User'}</h5>
+                  <h5 class="modal-title">${esc(u.full_name || 'User')}</h5>
                   <button class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                   <dl class="row small mb-4">
-                    <dt class="col-sm-3 text-secondary">Email</dt><dd class="col-sm-9">${u.email}</dd>
-                    <dt class="col-sm-3 text-secondary">Role</dt><dd class="col-sm-9 text-capitalize">${u.role.replace('_',' ')}</dd>
-                    <dt class="col-sm-3 text-secondary">Phone</dt><dd class="col-sm-9">${u.phone || '—'}</dd>
+                    <dt class="col-sm-3 text-secondary">Email</dt><dd class="col-sm-9">${esc(u.email)}</dd>
+                    <dt class="col-sm-3 text-secondary">Role</dt><dd class="col-sm-9 text-capitalize">${esc(u.role.replace('_',' '))}</dd>
+                    <dt class="col-sm-3 text-secondary">Phone</dt><dd class="col-sm-9">${esc(u.phone || '—')}</dd>
                     <dt class="col-sm-3 text-secondary">Joined</dt><dd class="col-sm-9">${fmtDate(u.created_at)}</dd>
+                    ${u.last_login_at ? `<dt class="col-sm-3 text-secondary">Last login</dt><dd class="col-sm-9">${fmtDate(u.last_login_at)}</dd>` : ''}
                   </dl>
                   ${u.businesses?.length ? `
                     <h6 class="fw-bold">Businesses (${u.businesses.length})</h6>
                     <ul class="list-group mb-3">
                       ${u.businesses.map(b => `
                         <li class="list-group-item d-flex justify-content-between align-items-center">
-                          <span>${b.name} <span class="badge text-bg-light text-capitalize ms-1">${b.status}</span></span>
-                          <a href="/business.html?id=${b.id}" target="_blank" class="small">View →</a>
+                          <span>${esc(b.name)} <span class="badge text-bg-light text-capitalize ms-1">${esc(b.status)}</span></span>
+                          <a href="/business.html?id=${encodeURIComponent(b.id)}" target="_blank" class="small">View →</a>
                         </li>
                       `).join('')}
                     </ul>` : ''}
@@ -628,13 +716,13 @@
             </div>
           </div>
         `);
-        new bootstrap.Modal('#user-modal').show();
+        if (window.bootstrap?.Modal) new bootstrap.Modal('#user-modal').show();
       } catch (err) { toast(err.message, 'error'); }
     }
 
-    // ═══════════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════
     // BUSINESSES
-    // ═══════════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════
     async function renderBusinesses() {
       $main.innerHTML = `
         <div class="admin-header">
@@ -681,8 +769,6 @@
         </div>
       `;
 
-      const selectedBiz = new Set();
-
       const load = async () => {
         const params = new URLSearchParams();
         const q = $('#biz-q').value.trim();
@@ -711,20 +797,20 @@
               <tbody>
                 ${businesses.map(b => `
                   <tr>
-                    ${IS_ADMIN ? `<td><input type="checkbox" class="row-check-biz" data-id="${b.id}" ${selectedBiz.has(b.id) ? 'checked' : ''}></td>` : ''}
+                    ${IS_ADMIN ? `<td><input type="checkbox" class="row-check-biz" data-id="${b.id}" ${SELECTED_BIZ.has(b.id) ? 'checked' : ''}></td>` : ''}
                     <td>
                       <div class="d-flex align-items-center gap-2">
                         ${b.cover_url
-                          ? `<img src="${b.cover_url}" style="width:34px;height:34px;border-radius:6px;object-fit:cover;" onerror="this.style.display='none'">`
-                          : `<div class="avatar-sm">${b.name[0]}</div>`}
+                          ? `<img src="${esc(b.cover_url)}" style="width:34px;height:34px;border-radius:6px;object-fit:cover;" onerror="this.style.display='none'">`
+                          : `<div class="avatar-sm">${esc(b.name[0])}</div>`}
                         <div>
-                          <div class="fw-semibold small">${b.name}</div>
-                          <div class="text-secondary small">${b.city || '—'}</div>
+                          <div class="fw-semibold small">${esc(b.name)}</div>
+                          <div class="text-secondary small">${esc(b.city || '—')}</div>
                         </div>
                       </div>
                     </td>
-                    <td class="small text-secondary">${b.owner_email || '—'}</td>
-                    <td><span class="badge text-bg-light text-capitalize">${b.category}</span></td>
+                    <td class="small text-secondary">${esc(b.owner_email || '—')}</td>
+                    <td><span class="badge text-bg-light text-capitalize">${esc(b.category)}</span></td>
                     <td>
                       <select class="form-select form-select-sm" data-biz-status="${b.id}" style="min-width:130px;" ${!IS_ADMIN ? 'disabled' : ''}>
                         ${['active','pending','suspended','closed'].map(s => `
@@ -735,7 +821,7 @@
                     <td class="text-end small">${b.booking_count}</td>
                     <td class="text-end">
                       <div class="btn-group btn-group-sm">
-                        <a href="/business.html?id=${b.id}" target="_blank" class="btn btn-outline-secondary"><i class="bi bi-box-arrow-up-right"></i></a>
+                        <a href="/business.html?id=${encodeURIComponent(b.id)}" target="_blank" class="btn btn-outline-secondary"><i class="bi bi-box-arrow-up-right"></i></a>
                         ${IS_ADMIN ? `<button class="btn btn-outline-danger" data-biz-delete="${b.id}"><i class="bi bi-trash"></i></button>` : ''}
                       </div>
                     </td>
@@ -766,15 +852,19 @@
             });
           });
 
-          // Selection
           const bar = $('#bulk-bar-biz');
           const updateBar = () => {
-            if (selectedBiz.size) { bar.classList.remove('d-none'); $('#bulk-count-biz').textContent = `${selectedBiz.size} selected`; }
-            else bar.classList.add('d-none');
+            if (SELECTED_BIZ.size) {
+              bar.classList.remove('d-none');
+              $('#bulk-count-biz').textContent = `${SELECTED_BIZ.size} selected`;
+            } else {
+              bar.classList.add('d-none');
+            }
           };
           container.querySelectorAll('.row-check-biz').forEach(cb => {
             cb.addEventListener('change', () => {
-              if (cb.checked) selectedBiz.add(cb.dataset.id); else selectedBiz.delete(cb.dataset.id);
+              if (cb.checked) SELECTED_BIZ.add(cb.dataset.id);
+              else SELECTED_BIZ.delete(cb.dataset.id);
               updateBar();
             });
           });
@@ -782,13 +872,15 @@
             const c = e.target.checked;
             container.querySelectorAll('.row-check-biz').forEach(cb => {
               cb.checked = c;
-              if (c) selectedBiz.add(cb.dataset.id); else selectedBiz.delete(cb.dataset.id);
+              if (c) SELECTED_BIZ.add(cb.dataset.id);
+              else SELECTED_BIZ.delete(cb.dataset.id);
             });
             updateBar();
           });
           updateBar();
         } catch (err) {
-          container.innerHTML = `<div class="alert alert-danger m-3">${err.message}</div>`;
+          console.error('[admin] businesses failed:', err);
+          container.innerHTML = `<div class="alert alert-danger m-3">${esc(err.message)}</div>`;
         }
       };
 
@@ -810,17 +902,17 @@
         $('#bulk-apply-biz').addEventListener('click', async () => {
           const action = $('#bulk-action-biz').value;
           if (!action) return toast('Pick an action', 'error');
-          if (action === 'delete' && !confirm(`Delete ${selectedBiz.size} business(es)?`)) return;
+          if (action === 'delete' && !confirm(`Delete ${SELECTED_BIZ.size} business(es)?`)) return;
           else if (action !== 'delete' && !confirm(`Apply "${action}"?`)) return;
           try {
             const res = await api('/admin/businesses/bulk', {
-              method: 'POST', body: JSON.stringify({ businessIds: [...selectedBiz], action }),
+              method: 'POST', body: JSON.stringify({ businessIds: [...SELECTED_BIZ], action }),
             });
             toast(`Updated ${res.updated}`, 'success');
-            selectedBiz.clear(); load();
+            SELECTED_BIZ.clear(); load();
           } catch (err) { toast(err.message, 'error'); }
         });
-        $('#bulk-clear-biz').addEventListener('click', () => { selectedBiz.clear(); load(); });
+        $('#bulk-clear-biz').addEventListener('click', () => { SELECTED_BIZ.clear(); load(); });
       }
 
       $('#biz-search').addEventListener('click', load);
@@ -830,9 +922,9 @@
       load();
     }
 
-    // ═══════════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════
     // BOOKINGS
-    // ═══════════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════
     async function renderBookings() {
       $main.innerHTML = `
         <div class="admin-header">
@@ -891,19 +983,19 @@
                       <div class="text-secondary small">${fmtDate(b.start_time)}</div>
                     </td>
                     <td>
-                      <div class="small">${b.business_name || '—'}</div>
-                      <div class="text-secondary small">${b.owner_email || ''}</div>
+                      <div class="small">${esc(b.business_name || '—')}</div>
+                      <div class="text-secondary small">${esc(b.owner_email || '')}</div>
                     </td>
                     <td>
-                      <div class="small">${b.customer_name || '—'}</div>
-                      <div class="text-secondary small">${b.customer_email || ''}</div>
+                      <div class="small">${esc(b.customer_name || '—')}</div>
+                      <div class="text-secondary small">${esc(b.customer_email || '')}</div>
                     </td>
                     <td>
                       <span class="badge text-bg-${
                         b.status === 'confirmed' ? 'success' :
                         b.status === 'cancelled' ? 'danger'  :
                         b.status === 'completed' ? 'info'    : 'warning'
-                      } text-capitalize">${b.status}</span>
+                      } text-capitalize">${esc(b.status)}</span>
                     </td>
                     <td class="text-end small fw-semibold">${fmtMoney(b.total_amount)}</td>
                     <td class="text-end small text-secondary">${fmtMoney(b.platform_fee)}</td>
@@ -913,7 +1005,8 @@
             </table>
           ` : `<div class="p-5 text-center text-secondary"><i class="bi bi-calendar-x" style="font-size:2rem; opacity:0.4;"></i><p class="mb-0 mt-2">No bookings match your filters.</p></div>`;
         } catch (err) {
-          container.innerHTML = `<div class="alert alert-danger m-3">${err.message}</div>`;
+          console.error('[admin] bookings failed:', err);
+          container.innerHTML = `<div class="alert alert-danger m-3">${esc(err.message)}</div>`;
         }
       };
 
@@ -922,9 +1015,9 @@
       load();
     }
 
-    // ═══════════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════
     // AUDIT LOG
-    // ═══════════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════
     async function renderAudit() {
       $main.innerHTML = `
         <div class="admin-header">
@@ -984,11 +1077,11 @@
                 ${entries.map(e => `
                   <tr>
                     <td class="small text-secondary">${fmtDate(e.created_at)}</td>
-                    <td class="small">${e.actor_name || e.actor_email || '—'}</td>
-                    <td><span class="badge ${actionBadge[e.action_group] || 'text-bg-secondary'}">${e.action}</span></td>
-                    <td class="small">${e.entity_type}${e.entity_id ? ` <code>${e.entity_id.slice(0,8)}</code>` : ''}</td>
+                    <td class="small">${esc(e.actor_name || e.actor_email || '—')}</td>
+                    <td><span class="badge ${actionBadge[e.action_group] || 'text-bg-secondary'}">${esc(e.action)}</span></td>
+                    <td class="small">${esc(e.entity_type)}${e.entity_id ? ` <code>${esc(e.entity_id.slice(0,8))}</code>` : ''}</td>
                     <td class="small text-secondary" style="max-width:340px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
-                      ${e.changes ? JSON.stringify(e.changes) : '—'}
+                      ${e.changes ? esc(JSON.stringify(e.changes)) : '—'}
                     </td>
                   </tr>
                 `).join('')}
@@ -996,7 +1089,8 @@
             </table>
           ` : `<div class="p-5 text-center text-secondary"><i class="bi bi-journal-x" style="font-size:2rem; opacity:0.4;"></i><p class="mb-0 mt-2">No audit entries yet.</p></div>`;
         } catch (err) {
-          container.innerHTML = `<div class="alert alert-danger m-3">${err.message}</div>`;
+          console.error('[admin] audit failed:', err);
+          container.innerHTML = `<div class="alert alert-danger m-3">${esc(err.message)}</div>`;
         }
       };
 
@@ -1005,8 +1099,75 @@
       load();
     }
 
-    // ── Boot ──────────────────────────────────────────
-    renderView('overview');
+    // ═══════════════════════════════════════════════════════
+    // LOGIN ATTEMPTS
+    // ═══════════════════════════════════════════════════════
+    async function renderLogins() {
+      $main.innerHTML = `
+        <div class="admin-header">
+          <div><h1>Login attempts</h1><p class="text-secondary mb-0">Track sign-in activity</p></div>
+        </div>
+
+        <div class="table-card mb-3">
+          <div class="p-3">
+            <div class="row g-2">
+              <div class="col-md-5"><input id="la-email" class="form-control" placeholder="Filter by email…" /></div>
+              <div class="col-md-4"><input id="la-ip" class="form-control" placeholder="Filter by IP…" /></div>
+              <div class="col-md-3">
+                <div class="form-check mt-2">
+                  <input class="form-check-input" type="checkbox" id="la-failed" />
+                  <label class="form-check-label small" for="la-failed">Failed only</label>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="table-card">
+          <div id="la-table"><div class="text-center py-5"><div class="spinner-border text-primary"></div></div></div>
+        </div>
+      `;
+
+      const load = async () => {
+        const params = new URLSearchParams();
+        if ($('#la-email').value) params.set('email', $('#la-email').value);
+        if ($('#la-ip').value)    params.set('ip', $('#la-ip').value);
+        if ($('#la-failed').checked) params.set('onlyFailed', 'true');
+
+        const c = $('#la-table');
+        c.innerHTML = `<div class="text-center py-5"><div class="spinner-border text-primary"></div></div>`;
+        try {
+          const { attempts } = await api('/admin/login-attempts?' + params);
+          c.innerHTML = attempts.length ? `
+            <table class="table table-hover mb-0">
+              <thead><tr><th>When</th><th>Email</th><th>IP</th><th>Result</th><th>Reason</th></tr></thead>
+              <tbody>
+                ${attempts.map(a => `
+                  <tr>
+                    <td class="small text-secondary">${fmtDate(a.created_at)}</td>
+                    <td class="small">${esc(a.email)}</td>
+                    <td class="small">${esc(a.ip_address || '—')}</td>
+                    <td>
+                      <span class="badge text-bg-${a.success ? 'success' : 'danger'}">
+                        ${a.success ? 'Success' : 'Failed'}
+                      </span>
+                    </td>
+                    <td class="small text-secondary">${esc(a.reason || '—')}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          ` : '<div class="p-5 text-center text-secondary">No login attempts.</div>';
+        } catch (err) {
+          console.error('[admin] logins failed:', err);
+          c.innerHTML = `<div class="alert alert-danger m-3">${esc(err.message)}</div>`;
+        }
+      };
+
+      ['la-email','la-ip'].forEach(id => $('#' + id).addEventListener('input', load));
+      $('#la-failed').addEventListener('change', load);
+      load();
+    }
   </script>
 </body>
 </html>

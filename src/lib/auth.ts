@@ -11,18 +11,14 @@ export interface JwtPayload {
   aud: 'customer' | 'admin';
 }
 
-// ─────────────────────────────────────────────────────────────
-// Passwords
-// ─────────────────────────────────────────────────────────────
+// ─── Passwords ──────────────────────────────────────
 export const hashPassword = (plain: string) =>
   bcrypt.hash(plain, config.BCRYPT_ROUNDS);
 
 export const verifyPassword = (plain: string, hash: string) =>
   bcrypt.compare(plain, hash);
 
-// ─────────────────────────────────────────────────────────────
-// Access tokens (JWT with audience segregation)
-// ─────────────────────────────────────────────────────────────
+// ─── Access tokens ──────────────────────────────────
 export function signAccessToken(
   payload: Omit<JwtPayload, 'aud'>,
   audience: 'customer' | 'admin',
@@ -31,8 +27,10 @@ export function signAccessToken(
     ? config.ADMIN_JWT_ACCESS_TTL
     : config.JWT_ACCESS_TTL;
 
+  // jsonwebtoken adds `aud` to the token from options.audience.
+  // Do NOT also include `aud` in the payload — it will error.
   return jwt.sign(
-    { ...payload, aud: audience },
+    payload,
     config.JWT_SECRET,
     {
       expiresIn: ttl as any,
@@ -59,9 +57,7 @@ export function verifyAccessToken(
   };
 }
 
-// ─────────────────────────────────────────────────────────────
-// Refresh tokens (opaque, stored hashed)
-// ─────────────────────────────────────────────────────────────
+// ─── Refresh tokens ─────────────────────────────────
 export function generateRefreshToken(): { raw: string; hash: string } {
   const raw = crypto.randomBytes(48).toString('base64url');
   const hash = crypto.createHash('sha256').update(raw).digest('hex');

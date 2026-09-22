@@ -13,15 +13,10 @@ const Env = z.object({
   JWT_REFRESH_TTL_DAYS: z.coerce.number().int().default(30),
   BCRYPT_ROUNDS: z.coerce.number().int().min(8).max(15).default(12),
 
-  // ─── Admin session hardening ──────────────────────
-  // Admin access tokens expire faster than customer tokens
+  // ─── Admin hardening ──────────────────────────────
   ADMIN_JWT_ACCESS_TTL: z.string().default('30m'),
-  // Max failed login attempts before lockout
   MAX_FAILED_ATTEMPTS: z.coerce.number().int().default(5),
-  // Lockout duration in minutes
   LOCKOUT_MINUTES: z.coerce.number().int().default(15),
-  // Comma-separated list of IPs allowed to reach /admin-login.
-  // Empty = no restriction (dev only). Example: '127.0.0.1,10.0.0.5'
   ADMIN_IP_ALLOWLIST: z.string().default(''),
 });
 

@@ -37,8 +37,6 @@ export async function audit(entry: AuditEntry): Promise<void> {
       ip_address: entry.req?.ip ?? null,
     }).execute();
   } catch (err) {
-    // Never let audit failure break the main request
-    // (log to stderr; a real system would queue + retry)
     console.error('[audit] write failed:', err);
   }
 }

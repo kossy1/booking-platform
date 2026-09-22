@@ -15,9 +15,6 @@ import { config } from '../config.js';
 import { queueEmail } from '../lib/notifications.js';
 import { audit } from '../lib/audit.js';
 
-// ─────────────────────────────────────────────────────────────
-// Schemas
-// ─────────────────────────────────────────────────────────────
 const RegisterBody = z.object({
   fullName: z.string().min(1).max(255),
   email: z.string().email().max(255),
@@ -31,25 +28,13 @@ const LoginBody = z.object({
   password: z.string().min(1),
 });
 
-const RefreshBody = z.object({
-  refreshToken: z.string().min(10),
-});
+const RefreshBody = z.object({ refreshToken: z.string().min(10) });
+const LogoutBody  = z.object({ refreshToken: z.string().optional() });
 
-const LogoutBody = z.object({
-  refreshToken: z.string().optional(),
-});
+const DUMMY_HASH = '$2b$12$invalidinvalidinvalidinvalidinvalidinvalidinvalidinvalid';
 
-// ─────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────
-
-/** Issue a fresh access + refresh pair for the given user + audience. */
 async function issueTokens(
-  user: {
-    id: string;
-    email: string;
-    role: 'customer' | 'business_owner' | 'staff' | 'admin' | 'support';
-  },
+  user: { id: string; email: string; role: 'customer' | 'business_owner' | 'staff' | 'admin' | 'support' },
   audience: 'customer' | 'admin',
   meta: { ip?: string; userAgent?: string },
 ) {
@@ -73,32 +58,19 @@ async function issueTokens(
   return { accessToken, refreshToken: raw, expiresAt };
 }
 
-/** Check whether an IP is in the admin allowlist. Empty list = allow all. */
 function isIpAllowed(ip: string | undefined): boolean {
-  const list = config.ADMIN_IP_ALLOWLIST
-    .split(',')
-    .map(s => s.trim())
-    .filter(Boolean);
-
+  const list = config.ADMIN_IP_ALLOWLIST.split(',').map(s => s.trim()).filter(Boolean);
   if (!list.length) return true;
   if (!ip) return false;
-
-  // Normalize IPv4-mapped IPv6
   const normalized = ip === '::ffff:127.0.0.1' ? '127.0.0.1' : ip;
-
   return list.some(entry => {
     const e = entry === '::1' ? '127.0.0.1' : entry;
     return e === normalized || e === ip;
   });
 }
 
-/** Record a login attempt for later auditing. */
 async function recordAttempt(opts: {
-  email: string;
-  ip?: string;
-  userAgent?: string;
-  success: boolean;
-  reason?: string;
+  email: string; ip?: string; userAgent?: string; success: boolean; reason?: string;
 }) {
   try {
     await db.insertInto('login_attempts').values({
@@ -108,23 +80,12 @@ async function recordAttempt(opts: {
       success: opts.success ? 1 : 0,
       reason: opts.reason ?? null,
     }).execute();
-  } catch {
-    // If the table isn't there, don't fail the login flow
-  }
+  } catch { /* ignore */ }
 }
 
-/** Neutral bcrypt hash used to burn time when the user doesn't exist. */
-const DUMMY_HASH =
-  '$2b$12$invalidinvalidinvalidinvalidinvalidinvalidinvalidinvalid';
-
-// ─────────────────────────────────────────────────────────────
-// Routes
-// ─────────────────────────────────────────────────────────────
 export async function authRoutes(app: FastifyInstance) {
 
-  // ═══════════════════════════════════════════════════════════
-  // REGISTER
-  // ═══════════════════════════════════════════════════════════
+  // ── REGISTER ────────────────────────────────────────
   app.post(
     '/auth/register',
     { config: { rateLimit: { max: 5, timeWindow: '10 minutes' } } },
@@ -162,7 +123,6 @@ export async function authRoutes(app: FastifyInstance) {
         { ip: req.ip, userAgent: String(req.headers['user-agent'] ?? '') },
       );
 
-      // Fire-and-forget welcome email
       queueEmail({
         userId,
         template: 'welcome',
@@ -171,21 +131,14 @@ export async function authRoutes(app: FastifyInstance) {
       }).catch((err) => req.log.warn({ err }, 'welcome email queue failed'));
 
       return reply.code(201).send({
-        user: {
-          id: userId,
-          email,
-          fullName: input.fullName,
-          role: input.role,
-        },
+        user: { id: userId, email, fullName: input.fullName, role: input.role },
         ...tokens,
         audience: 'customer',
       });
     },
   );
 
-  // ═══════════════════════════════════════════════════════════
-  // CUSTOMER LOGIN
-  // ═══════════════════════════════════════════════════════════
+  // ── LOGIN (customer) ────────────────────────────────
   app.post(
     '/auth/login',
     { config: { rateLimit: { max: 10, timeWindow: '5 minutes' } } },
@@ -216,21 +169,14 @@ export async function authRoutes(app: FastifyInstance) {
       );
 
       return reply.send({
-        user: {
-          id: user.id,
-          email: user.email,
-          fullName: user.full_name,
-          role: user.role,
-        },
+        user: { id: user.id, email: user.email, fullName: user.full_name, role: user.role },
         ...tokens,
         audience: 'customer',
       });
     },
   );
 
-  // ═══════════════════════════════════════════════════════════
-  // ADMIN LOGIN
-  // ═══════════════════════════════════════════════════════════
+  // ── ADMIN LOGIN ─────────────────────────────────────
   app.post(
     '/auth/admin/login',
     { config: { rateLimit: { max: 5, timeWindow: '15 minutes' } } },
@@ -238,7 +184,6 @@ export async function authRoutes(app: FastifyInstance) {
       const ip = req.ip;
       const ua = String(req.headers['user-agent'] ?? '');
 
-      // 1. IP allowlist
       if (!isIpAllowed(ip)) {
         req.log.warn({ ip }, 'admin login from disallowed IP');
         return reply.code(403).send({
@@ -250,15 +195,13 @@ export async function authRoutes(app: FastifyInstance) {
       const input = LoginBody.parse(req.body);
       const email = input.email.toLowerCase();
 
-      // 2. Lookup
       const user = await db.selectFrom('users').selectAll()
         .where('email', '=', email)
         .where('deleted_at', 'is', null)
         .executeTakeFirst();
 
-      // 3. Only admin/support roles can use this endpoint
       if (!user || (user.role !== 'admin' && user.role !== 'support')) {
-        await verifyPassword(input.password, DUMMY_HASH); // burn time
+        await verifyPassword(input.password, DUMMY_HASH);
         await recordAttempt({ email, ip, userAgent: ua, success: false, reason: 'not_admin' });
         return reply.code(401).send({
           error: 'INVALID_CREDENTIALS',
@@ -266,7 +209,6 @@ export async function authRoutes(app: FastifyInstance) {
         });
       }
 
-      // 4. Lockout check
       if (user.locked_until && new Date(user.locked_until) > new Date()) {
         await recordAttempt({ email, ip, userAgent: ua, success: false, reason: 'locked' });
         const seconds = Math.ceil((new Date(user.locked_until).getTime() - Date.now()) / 1000);
@@ -277,7 +219,6 @@ export async function authRoutes(app: FastifyInstance) {
         });
       }
 
-      // 5. Verify password
       const ok = await verifyPassword(input.password, user.password_hash ?? DUMMY_HASH);
 
       if (!ok) {
@@ -294,13 +235,11 @@ export async function authRoutes(app: FastifyInstance) {
         await recordAttempt({ email, ip, userAgent: ua, success: false, reason: 'bad_password' });
 
         audit({
-          actorId: user.id,
-          entityType: 'system',
-          entityId: user.id,
+          actorId: user.id, entityType: 'system', entityId: user.id,
           action: 'admin.login',
           changes: { success: false, reason: 'bad_password', attempt: newAttempts, locked: shouldLock },
           req,
-        }).catch(() => { /* ignore */ });
+        }).catch(() => {});
 
         if (shouldLock) {
           return reply.code(423).send({
@@ -316,7 +255,6 @@ export async function authRoutes(app: FastifyInstance) {
         });
       }
 
-      // 6. Success — reset lock, stamp login
       await db.updateTable('users').set({
         failed_attempts: 0,
         locked_until: null,
@@ -326,39 +264,28 @@ export async function authRoutes(app: FastifyInstance) {
 
       await recordAttempt({ email, ip, userAgent: ua, success: true });
 
-      // 7. Issue admin-audience tokens
       const tokens = await issueTokens(
         { id: user.id, email: user.email, role: user.role as any },
         'admin',
         { ip, userAgent: ua },
       );
 
-      // 8. Audit
       audit({
-        actorId: user.id,
-        entityType: 'system',
-        entityId: user.id,
+        actorId: user.id, entityType: 'system', entityId: user.id,
         action: 'admin.login',
         changes: { success: true, ip },
         req,
-      }).catch(() => { /* ignore */ });
+      }).catch(() => {});
 
       return reply.send({
-        user: {
-          id: user.id,
-          email: user.email,
-          fullName: user.full_name,
-          role: user.role,
-        },
+        user: { id: user.id, email: user.email, fullName: user.full_name, role: user.role },
         ...tokens,
         audience: 'admin',
       });
     },
   );
 
-  // ═══════════════════════════════════════════════════════════
-  // REFRESH — customer audience
-  // ═══════════════════════════════════════════════════════════
+  // ── REFRESH (customer) ──────────────────────────────
   app.post('/auth/refresh', async (req, reply) => {
     const { refreshToken } = RefreshBody.parse(req.body);
     const hash = hashRefreshToken(refreshToken);
@@ -385,7 +312,6 @@ export async function authRoutes(app: FastifyInstance) {
       });
     }
 
-    // Rotate: revoke the old token before issuing a new one
     await db.updateTable('refresh_tokens')
       .set({ revoked_at: new Date() })
       .where('id', '=', row.token_id).execute();
@@ -399,9 +325,7 @@ export async function authRoutes(app: FastifyInstance) {
     return reply.send({ ...tokens, audience: 'customer' });
   });
 
-  // ═══════════════════════════════════════════════════════════
-  // REFRESH — admin audience
-  // ═══════════════════════════════════════════════════════════
+  // ── REFRESH (admin) ─────────────────────────────────
   app.post('/auth/admin/refresh', async (req, reply) => {
     const { refreshToken } = RefreshBody.parse(req.body);
     const hash = hashRefreshToken(refreshToken);
@@ -421,7 +345,6 @@ export async function authRoutes(app: FastifyInstance) {
       .where('refresh_tokens.token_hash', '=', hash)
       .executeTakeFirst();
 
-    // Reject if the user is no longer an admin/support
     if (
       !row || row.revoked_at || row.deleted_at ||
       new Date(row.expires_at) < new Date() ||
@@ -446,9 +369,7 @@ export async function authRoutes(app: FastifyInstance) {
     return reply.send({ ...tokens, audience: 'admin' });
   });
 
-  // ═══════════════════════════════════════════════════════════
-  // LOGOUT — customer
-  // ═══════════════════════════════════════════════════════════
+  // ── LOGOUT (customer) ───────────────────────────────
   app.post('/auth/logout', async (req, reply) => {
     const body = LogoutBody.parse(req.body ?? {});
     if (body.refreshToken) {
@@ -460,9 +381,7 @@ export async function authRoutes(app: FastifyInstance) {
     return reply.send({ ok: true });
   });
 
-  // ═══════════════════════════════════════════════════════════
-  // LOGOUT — admin (same DB effect, separate endpoint for clarity)
-  // ═══════════════════════════════════════════════════════════
+  // ── LOGOUT (admin) ──────────────────────────────────
   app.post('/auth/admin/logout', async (req, reply) => {
     const body = LogoutBody.parse(req.body ?? {});
     if (body.refreshToken) {
@@ -474,18 +393,14 @@ export async function authRoutes(app: FastifyInstance) {
     return reply.send({ ok: true });
   });
 
-  // ═══════════════════════════════════════════════════════════
-  // ME — customer
-  // ═══════════════════════════════════════════════════════════
+  // ── ME (customer) ───────────────────────────────────
   app.get('/auth/me', { preHandler: requireAuth }, async (req, reply) => {
     const user = await db.selectFrom('users')
       .select(['id', 'email', 'full_name', 'role', 'phone', 'timezone'])
       .where('id', '=', req.user!.sub)
       .executeTakeFirst();
 
-    if (!user) {
-      return reply.code(404).send({ error: 'NOT_FOUND', message: 'User not found' });
-    }
+    if (!user) return reply.code(404).send({ error: 'NOT_FOUND', message: 'User not found' });
 
     return reply.send({
       id: user.id,
@@ -497,9 +412,7 @@ export async function authRoutes(app: FastifyInstance) {
     });
   });
 
-  // ═══════════════════════════════════════════════════════════
-  // ME — admin
-  // ═══════════════════════════════════════════════════════════
+  // ── ME (admin) ──────────────────────────────────────
   app.get('/auth/admin/me', { preHandler: requireAdminAuth }, async (req, reply) => {
     const user = await db.selectFrom('users')
       .select(['id', 'email', 'full_name', 'role', 'last_login_at'])

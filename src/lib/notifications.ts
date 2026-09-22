@@ -24,11 +24,6 @@ export async function queueEmail(input: QueueInput) {
   }).execute();
 }
 
-/**
- * Runs forever, polling the notifications table every 10 seconds.
- * Processes up to 20 queued emails per tick.
- * Idempotent: only status='queued' rows are picked.
- */
 export async function startNotificationWorker() {
   let running = true;
   const INTERVAL_MS = 10_000;
@@ -51,14 +46,12 @@ export async function startNotificationWorker() {
 
       for (const n of pending) {
         try {
-          // Mark as processing to avoid double-send across restarts
           const updated = await db.updateTable('notifications')
             .set({ status: 'sending', attempts: n.attempts + 1 })
             .where('id', '=', n.id)
             .where('status', '=', 'queued')
             .executeTakeFirst();
 
-          // Kysely returns numUpdatedRows
           if (!Number((updated as any).numUpdatedRows ?? 0)) continue;
 
           const payload = JSON.parse(n.payload as string) as {

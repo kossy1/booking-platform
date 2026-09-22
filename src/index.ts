@@ -15,6 +15,7 @@ import { availabilityRoutes } from './routes/availability.js';
 import { bookingRoutes } from './routes/bookings.js';
 import { uploadRoutes } from './routes/uploads.js';
 import { adminRoutes } from './routes/admin.js';
+import { serviceRoutes } from './routes/services.js';
 import { healthRoutes } from './routes/health.js';
 import { AppError } from './lib/errors.js';
 import { db } from './db/client.js';
@@ -43,7 +44,6 @@ await app.register(rateLimit, {
   timeWindow: '1 minute',
 });
 
-// Static files — serves everything under /public including /uploads/*
 await app.register(fastifyStatic, {
   root: PUBLIC_DIR,
   prefix: '/',
@@ -61,17 +61,16 @@ await app.register(availabilityRoutes);
 await app.register(bookingRoutes);
 await app.register(uploadRoutes);
 await app.register(adminRoutes);
+await app.register(serviceRoutes);
 
 // ─── 404 ──────────────────────────────────────────────
 app.setNotFoundHandler((req, reply) => {
   if (req.url === '/favicon.ico') {
     return reply.code(204).send();
   }
-  // Static file paths → plain text
   if (/\.\w{2,5}$/.test(req.url)) {
     return reply.code(404).send('Not found');
   }
-  // API paths → JSON
   return reply.code(404).send({
     error: 'NOT_FOUND',
     message: `Route ${req.method} ${req.url} not found`,
@@ -143,8 +142,6 @@ process.on('unhandledRejection', (reason) => {
 try {
   await app.listen({ port: config.PORT, host: '0.0.0.0' });
   app.log.info(`Booking service ready on port ${config.PORT}`);
-
-  // Start background workers after the server is up
   startNotificationWorker();
 } catch (err) {
   app.log.error({ err }, 'Failed to start server');

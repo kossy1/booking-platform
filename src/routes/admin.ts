@@ -3,7 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { sql } from 'kysely';
 import { db } from '../db/client.js';
-import { requireAuth, requireRole } from '../lib/middleware.js';
+import { requireAdminAuth, requireRole } from '../lib/middleware.js';
 import { audit } from '../lib/audit.js';
 import { queueEmail } from '../lib/notifications.js';
 
@@ -47,6 +47,13 @@ const AuditQuery = z.object({
   offset: z.coerce.number().int().min(0).default(0),
 });
 
+const LoginAttemptsQuery = z.object({
+  email: z.string().optional(),
+  ip: z.string().optional(),
+  onlyFailed: z.coerce.boolean().default(false),
+  limit: z.coerce.number().int().min(1).max(200).default(100),
+});
+
 const IdParam = z.object({ id: z.string().uuid() });
 
 const UpdateUserBody = z.object({
@@ -81,6 +88,9 @@ function safeJson(s: string | null): unknown {
 const READ_ROLES: Array<'admin' | 'support'> = ['admin', 'support'];
 const WRITE_ROLES: Array<'admin'> = ['admin'];
 
+// ═════════════════════════════════════════════════════════════
+// Routes
+// ═════════════════════════════════════════════════════════════
 export async function adminRoutes(app: FastifyInstance) {
 
   // ═══════════════════════════════════════════════════════════
@@ -88,7 +98,7 @@ export async function adminRoutes(app: FastifyInstance) {
   // ═══════════════════════════════════════════════════════════
   app.get(
     '/admin/stats',
-    { preHandler: [requireAuth, requireRole(...READ_ROLES)] },
+    { preHandler: [requireAdminAuth, requireRole(...READ_ROLES)] },
     async (_req, reply) => {
       const [
         usersTotal, usersByRole,
@@ -96,39 +106,25 @@ export async function adminRoutes(app: FastifyInstance) {
         bookingsTotal, bookingsByStatus,
         revenue30d, recentSignups, recentBookings,
       ] = await Promise.all([
-        db.selectFrom('users')
-          .select(({ fn }) => fn.countAll<number>().as('n'))
+        db.selectFrom('users').select(({ fn }) => fn.countAll<number>().as('n'))
           .where('deleted_at', 'is', null).executeTakeFirst(),
-
-        db.selectFrom('users')
-          .select(['role', ({ fn }) => fn.countAll<number>().as('n')])
+        db.selectFrom('users').select(['role', ({ fn }) => fn.countAll<number>().as('n')])
           .where('deleted_at', 'is', null).groupBy('role').execute(),
-
-        db.selectFrom('businesses')
-          .select(({ fn }) => fn.countAll<number>().as('n')).executeTakeFirst(),
-
-        db.selectFrom('businesses')
-          .select(['status', ({ fn }) => fn.countAll<number>().as('n')])
+        db.selectFrom('businesses').select(({ fn }) => fn.countAll<number>().as('n')).executeTakeFirst(),
+        db.selectFrom('businesses').select(['status', ({ fn }) => fn.countAll<number>().as('n')])
           .groupBy('status').execute(),
-
-        db.selectFrom('bookings')
-          .select(({ fn }) => fn.countAll<number>().as('n')).executeTakeFirst(),
-
-        db.selectFrom('bookings')
-          .select(['status', ({ fn }) => fn.countAll<number>().as('n')])
+        db.selectFrom('bookings').select(({ fn }) => fn.countAll<number>().as('n')).executeTakeFirst(),
+        db.selectFrom('bookings').select(['status', ({ fn }) => fn.countAll<number>().as('n')])
           .groupBy('status').execute(),
-
         db.selectFrom('bookings')
           .select(({ fn }) => fn.sum<number>('total_amount').as('sum'))
           .where('status', 'in', ['confirmed', 'completed'])
           .where('created_at', '>=', sql`DATE_SUB(NOW(), INTERVAL 30 DAY)`)
           .executeTakeFirst(),
-
         db.selectFrom('users')
           .select(['id', 'email', 'full_name', 'role', 'created_at'])
           .where('deleted_at', 'is', null)
           .orderBy('created_at', 'desc').limit(5).execute(),
-
         db.selectFrom('bookings')
           .select(['id', 'business_id', 'customer_id', 'status', 'total_amount', 'start_time', 'created_at'])
           .orderBy('created_at', 'desc').limit(5).execute(),
@@ -162,10 +158,7 @@ export async function adminRoutes(app: FastifyInstance) {
           completed: bookingStatusMap.completed ?? 0,
           revenue30d: Number(revenue30d?.sum ?? 0),
         },
-        recent: {
-          signups: recentSignups,
-          bookings: recentBookings,
-        },
+        recent: { signups: recentSignups, bookings: recentBookings },
       });
     },
   );
@@ -175,7 +168,7 @@ export async function adminRoutes(app: FastifyInstance) {
   // ═══════════════════════════════════════════════════════════
   app.get(
     '/admin/users',
-    { preHandler: [requireAuth, requireRole(...READ_ROLES)] },
+    { preHandler: [requireAdminAuth, requireRole(...READ_ROLES)] },
     async (req, reply) => {
       const q = ListUsersQuery.parse(req.query);
 
@@ -196,7 +189,6 @@ export async function adminRoutes(app: FastifyInstance) {
         if (q.status === 'deleted') qb = qb.where('deleted_at', 'is not', null);
         return qb;
       };
-
       query = applyFilters(query);
       countQuery = applyFilters(countQuery);
 
@@ -205,14 +197,12 @@ export async function adminRoutes(app: FastifyInstance) {
         countQuery.executeTakeFirst(),
       ]);
 
-      // Business count for owners
       const ownerIds = users.filter(u => u.role === 'business_owner').map(u => u.id);
       let bizCounts: Record<string, number> = {};
       if (ownerIds.length) {
         const rows = await db.selectFrom('businesses')
           .select(['owner_id', ({ fn }) => fn.countAll<number>().as('n')])
-          .where('owner_id', 'in', ownerIds)
-          .groupBy('owner_id').execute();
+          .where('owner_id', 'in', ownerIds).groupBy('owner_id').execute();
         bizCounts = Object.fromEntries(rows.map(r => [r.owner_id, Number(r.n)]));
       }
 
@@ -222,29 +212,24 @@ export async function adminRoutes(app: FastifyInstance) {
           email_verified: Boolean(u.email_verified),
           business_count: bizCounts[u.id] ?? 0,
         })),
-        pagination: {
-          total: Number(totalRow?.n ?? 0),
-          limit: q.limit,
-          offset: q.offset,
-        },
+        pagination: { total: Number(totalRow?.n ?? 0), limit: q.limit, offset: q.offset },
       });
     },
   );
 
   app.get(
     '/admin/users/:id',
-    { preHandler: [requireAuth, requireRole(...READ_ROLES)] },
+    { preHandler: [requireAdminAuth, requireRole(...READ_ROLES)] },
     async (req, reply) => {
       const { id } = IdParam.parse(req.params);
 
       const user = await db.selectFrom('users')
         .select(['id', 'email', 'full_name', 'phone', 'role', 'email_verified',
-                 'timezone', 'locale', 'created_at', 'updated_at', 'deleted_at'])
+                 'timezone', 'locale', 'created_at', 'updated_at', 'deleted_at',
+                 'last_login_at', 'last_login_ip', 'failed_attempts', 'locked_until'])
         .where('id', '=', id).executeTakeFirst();
 
-      if (!user) {
-        return reply.code(404).send({ error: 'NOT_FOUND', message: 'User not found' });
-      }
+      if (!user) return reply.code(404).send({ error: 'NOT_FOUND', message: 'User not found' });
 
       const [businesses, bookings] = await Promise.all([
         db.selectFrom('businesses').selectAll().where('owner_id', '=', id).execute(),
@@ -259,7 +244,7 @@ export async function adminRoutes(app: FastifyInstance) {
 
   app.patch(
     '/admin/users/:id',
-    { preHandler: [requireAuth, requireRole(...WRITE_ROLES)] },
+    { preHandler: [requireAdminAuth, requireRole(...WRITE_ROLES)] },
     async (req, reply) => {
       const { id } = IdParam.parse(req.params);
       const input = UpdateUserBody.parse(req.body);
@@ -282,6 +267,13 @@ export async function adminRoutes(app: FastifyInstance) {
 
       await db.updateTable('users').set(updates).where('id', '=', id).execute();
 
+      // If the role changed, revoke all refresh tokens so old sessions die
+      if (input.role) {
+        await db.updateTable('refresh_tokens')
+          .set({ revoked_at: new Date() })
+          .where('user_id', '=', id).execute();
+      }
+
       await audit({
         actorId: me.sub,
         entityType: 'user',
@@ -301,7 +293,7 @@ export async function adminRoutes(app: FastifyInstance) {
 
   app.delete(
     '/admin/users/:id',
-    { preHandler: [requireAuth, requireRole(...WRITE_ROLES)] },
+    { preHandler: [requireAdminAuth, requireRole(...WRITE_ROLES)] },
     async (req, reply) => {
       const { id } = IdParam.parse(req.params);
       const me = req.user!;
@@ -310,13 +302,8 @@ export async function adminRoutes(app: FastifyInstance) {
         return reply.code(400).send({ error: 'SELF_DELETE', message: 'You cannot delete yourself' });
       }
 
-      await db.updateTable('users')
-        .set({ deleted_at: new Date() })
-        .where('id', '=', id).execute();
-
-      await db.updateTable('refresh_tokens')
-        .set({ revoked_at: new Date() })
-        .where('user_id', '=', id).execute();
+      await db.updateTable('users').set({ deleted_at: new Date() }).where('id', '=', id).execute();
+      await db.updateTable('refresh_tokens').set({ revoked_at: new Date() }).where('user_id', '=', id).execute();
 
       await audit({
         actorId: me.sub,
@@ -332,7 +319,7 @@ export async function adminRoutes(app: FastifyInstance) {
 
   app.post(
     '/admin/users/:id/restore',
-    { preHandler: [requireAuth, requireRole(...WRITE_ROLES)] },
+    { preHandler: [requireAdminAuth, requireRole(...WRITE_ROLES)] },
     async (req, reply) => {
       const { id } = IdParam.parse(req.params);
       const me = req.user!;
@@ -351,10 +338,9 @@ export async function adminRoutes(app: FastifyInstance) {
     },
   );
 
-  // ── Bulk user action ─────────────────────────────────────
   app.post(
     '/admin/users/bulk',
-    { preHandler: [requireAuth, requireRole(...WRITE_ROLES)] },
+    { preHandler: [requireAdminAuth, requireRole(...WRITE_ROLES)] },
     async (req, reply) => {
       const me = req.user!;
       const { userIds, action, role } = BulkUserBody.parse(req.body);
@@ -366,22 +352,16 @@ export async function adminRoutes(app: FastifyInstance) {
 
       let updated = 0;
       if (action === 'suspend') {
-        await db.updateTable('users')
-          .set({ deleted_at: new Date() })
-          .where('id', 'in', targetIds).execute();
-        await db.updateTable('refresh_tokens')
-          .set({ revoked_at: new Date() })
-          .where('user_id', 'in', targetIds).execute();
+        await db.updateTable('users').set({ deleted_at: new Date() }).where('id', 'in', targetIds).execute();
+        await db.updateTable('refresh_tokens').set({ revoked_at: new Date() }).where('user_id', 'in', targetIds).execute();
         updated = targetIds.length;
       } else if (action === 'restore') {
-        await db.updateTable('users')
-          .set({ deleted_at: null })
-          .where('id', 'in', targetIds).execute();
+        await db.updateTable('users').set({ deleted_at: null }).where('id', 'in', targetIds).execute();
         updated = targetIds.length;
       } else if (action === 'set_role' && role) {
-        await db.updateTable('users')
-          .set({ role })
-          .where('id', 'in', targetIds).execute();
+        await db.updateTable('users').set({ role }).where('id', 'in', targetIds).execute();
+        // Revoke sessions since role changed
+        await db.updateTable('refresh_tokens').set({ revoked_at: new Date() }).where('user_id', 'in', targetIds).execute();
         updated = targetIds.length;
       }
 
@@ -403,7 +383,7 @@ export async function adminRoutes(app: FastifyInstance) {
   // ═══════════════════════════════════════════════════════════
   app.get(
     '/admin/businesses',
-    { preHandler: [requireAuth, requireRole(...READ_ROLES)] },
+    { preHandler: [requireAdminAuth, requireRole(...READ_ROLES)] },
     async (req, reply) => {
       const q = ListBusinessesQuery.parse(req.query);
 
@@ -436,16 +416,12 @@ export async function adminRoutes(app: FastifyInstance) {
       if (ids.length) {
         const rows = await db.selectFrom('bookings')
           .select(['business_id', ({ fn }) => fn.countAll<number>().as('n')])
-          .where('business_id', 'in', ids)
-          .groupBy('business_id').execute();
+          .where('business_id', 'in', ids).groupBy('business_id').execute();
         bookingCounts = Object.fromEntries(rows.map(r => [r.business_id, Number(r.n)]));
       }
 
       return reply.send({
-        businesses: businesses.map(b => ({
-          ...b,
-          booking_count: bookingCounts[b.id] ?? 0,
-        })),
+        businesses: businesses.map(b => ({ ...b, booking_count: bookingCounts[b.id] ?? 0 })),
         pagination: { limit: q.limit, offset: q.offset },
       });
     },
@@ -453,7 +429,7 @@ export async function adminRoutes(app: FastifyInstance) {
 
   app.get(
     '/admin/businesses/:id',
-    { preHandler: [requireAuth, requireRole(...READ_ROLES)] },
+    { preHandler: [requireAdminAuth, requireRole(...READ_ROLES)] },
     async (req, reply) => {
       const { id } = IdParam.parse(req.params);
 
@@ -469,9 +445,7 @@ export async function adminRoutes(app: FastifyInstance) {
         .where('businesses.id', '=', id)
         .executeTakeFirst();
 
-      if (!business) {
-        return reply.code(404).send({ error: 'NOT_FOUND', message: 'Business not found' });
-      }
+      if (!business) return reply.code(404).send({ error: 'NOT_FOUND', message: 'Business not found' });
 
       const [services, staff, recentBookings, stats] = await Promise.all([
         db.selectFrom('services').selectAll().where('business_id', '=', id).execute(),
@@ -504,7 +478,7 @@ export async function adminRoutes(app: FastifyInstance) {
 
   app.patch(
     '/admin/businesses/:id/status',
-    { preHandler: [requireAuth, requireRole(...WRITE_ROLES)] },
+    { preHandler: [requireAdminAuth, requireRole(...WRITE_ROLES)] },
     async (req, reply) => {
       const { id } = IdParam.parse(req.params);
       const { status, reason } = UpdateBusinessStatusBody.parse(req.body);
@@ -528,7 +502,6 @@ export async function adminRoutes(app: FastifyInstance) {
         req,
       });
 
-      // Queue owner email for status changes
       if (status === 'active' || status === 'suspended' || status === 'closed') {
         const owner = await db
           .selectFrom('businesses')
@@ -571,7 +544,7 @@ export async function adminRoutes(app: FastifyInstance) {
 
   app.delete(
     '/admin/businesses/:id',
-    { preHandler: [requireAuth, requireRole(...WRITE_ROLES)] },
+    { preHandler: [requireAdminAuth, requireRole(...WRITE_ROLES)] },
     async (req, reply) => {
       const { id } = IdParam.parse(req.params);
       const me = req.user!;
@@ -604,10 +577,9 @@ export async function adminRoutes(app: FastifyInstance) {
     },
   );
 
-  // ── Bulk business action ─────────────────────────────────
   app.post(
     '/admin/businesses/bulk',
-    { preHandler: [requireAuth, requireRole(...WRITE_ROLES)] },
+    { preHandler: [requireAdminAuth, requireRole(...WRITE_ROLES)] },
     async (req, reply) => {
       const me = req.user!;
       const { businessIds, action } = BulkBusinessBody.parse(req.body);
@@ -632,8 +604,7 @@ export async function adminRoutes(app: FastifyInstance) {
       } else {
         const statusMap = { activate: 'active', suspend: 'suspended', close: 'closed' } as const;
         const status = statusMap[action as keyof typeof statusMap];
-        await db.updateTable('businesses').set({ status })
-          .where('id', 'in', businessIds).execute();
+        await db.updateTable('businesses').set({ status }).where('id', 'in', businessIds).execute();
       }
 
       await audit({
@@ -654,7 +625,7 @@ export async function adminRoutes(app: FastifyInstance) {
   // ═══════════════════════════════════════════════════════════
   app.get(
     '/admin/bookings',
-    { preHandler: [requireAuth, requireRole(...READ_ROLES)] },
+    { preHandler: [requireAdminAuth, requireRole(...READ_ROLES)] },
     async (req, reply) => {
       const q = ListBookingsQuery.parse(req.query);
 
@@ -698,7 +669,7 @@ export async function adminRoutes(app: FastifyInstance) {
   // ═══════════════════════════════════════════════════════════
   app.get(
     '/admin/audit',
-    { preHandler: [requireAuth, requireRole(...READ_ROLES)] },
+    { preHandler: [requireAdminAuth, requireRole(...READ_ROLES)] },
     async (req, reply) => {
       const q = AuditQuery.parse(req.query);
 
@@ -734,11 +705,34 @@ export async function adminRoutes(app: FastifyInstance) {
   );
 
   // ═══════════════════════════════════════════════════════════
+  // LOGIN ATTEMPTS
+  // ═══════════════════════════════════════════════════════════
+  app.get(
+    '/admin/login-attempts',
+    { preHandler: [requireAdminAuth, requireRole(...READ_ROLES)] },
+    async (req, reply) => {
+      const q = LoginAttemptsQuery.parse(req.query);
+
+      let query = db.selectFrom('login_attempts').selectAll();
+      if (q.email)      query = query.where('email', 'like', `%${q.email.toLowerCase()}%`);
+      if (q.ip)         query = query.where('ip_address', '=', q.ip);
+      if (q.onlyFailed) query = query.where('success', '=', 0);
+
+      const attempts = await query
+        .orderBy('created_at', 'desc')
+        .limit(q.limit)
+        .execute();
+
+      return reply.send({ attempts });
+    },
+  );
+
+  // ═══════════════════════════════════════════════════════════
   // ANALYTICS
   // ═══════════════════════════════════════════════════════════
   app.get(
     '/admin/analytics',
-    { preHandler: [requireAuth, requireRole(...READ_ROLES)] },
+    { preHandler: [requireAdminAuth, requireRole(...READ_ROLES)] },
     async (req, reply) => {
       const days = Math.min(Math.max(Number((req.query as any)?.days ?? 30), 7), 180);
 

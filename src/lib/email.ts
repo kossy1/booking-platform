@@ -60,14 +60,11 @@ export function renderEmail(template: EmailTemplate, data: TemplateData): Render
         <h1 style="font-size:22px;margin:0 0 16px;">Your business is live!</h1>
         <p>Hi ${name},</p>
         <p>Great news — <strong>${bizName}</strong> has been approved and is now visible to customers on BookEasy.</p>
-        <p>You can start accepting bookings immediately. Make sure your services and availability are set up so customers can book.</p>
         ${button(`${BRAND.url}/dashboard.html`, 'Go to dashboard')}
-        <p style="margin-top:24px;color:#6b7280;font-size:13px;">— The ${BRAND.name} team</p>
       `);
-      const text = `Hi ${name},\n\n${bizName} is now live on ${BRAND.name}.\n\nGo to your dashboard: ${BRAND.url}/dashboard.html`;
+      const text = `Hi ${name}, ${bizName} is now live on ${BRAND.name}.`;
       return { subject, html, text };
     }
-
     case 'business_suspended': {
       const bizName = String(data.businessName ?? 'your business');
       const reason = data.reason ? `\n\nReason: ${data.reason}` : '';
@@ -77,27 +74,21 @@ export function renderEmail(template: EmailTemplate, data: TemplateData): Render
         <p>Hi ${name},</p>
         <p>Your business <strong>${bizName}</strong> has been temporarily suspended from BookEasy.</p>
         ${reason ? `<p><strong>Reason:</strong> ${data.reason}</p>` : ''}
-        <p>If you believe this is a mistake, please reply to this email.</p>
-        ${button(`mailto:support@bookeasy.demo`, 'Contact support')}
       `);
-      const text = `Hi ${name},\n\n${bizName} has been suspended.${reason}\n\nContact support if you have questions.`;
+      const text = `Hi ${name}, ${bizName} has been suspended.${reason}`;
       return { subject, html, text };
     }
-
     case 'business_closed': {
       const bizName = String(data.businessName ?? 'your business');
       const subject = `${bizName} has been closed`;
       const html = layout(subject, `
         <h1 style="font-size:22px;margin:0 0 16px;">Business closed</h1>
         <p>Hi ${name},</p>
-        <p>Your business <strong>${bizName}</strong> has been marked as closed on BookEasy.</p>
-        <p>If you'd like to reopen it, you can do so from your dashboard.</p>
-        ${button(`${BRAND.url}/dashboard.html`, 'Open dashboard')}
+        <p>Your business <strong>${bizName}</strong> has been marked as closed.</p>
       `);
-      const text = `Hi ${name},\n\n${bizName} has been closed on ${BRAND.name}.`;
+      const text = `Hi ${name}, ${bizName} has been closed.`;
       return { subject, html, text };
     }
-
     case 'welcome': {
       const subject = `Welcome to ${BRAND.name}!`;
       const html = layout(subject, `
@@ -106,10 +97,9 @@ export function renderEmail(template: EmailTemplate, data: TemplateData): Render
         <p>Thanks for joining ${BRAND.name}. You can now browse and book appointments instantly.</p>
         ${button(`${BRAND.url}/browse.html`, 'Start browsing')}
       `);
-      const text = `Hi ${name}, welcome to ${BRAND.name}! Browse businesses: ${BRAND.url}/browse.html`;
+      const text = `Hi ${name}, welcome to ${BRAND.name}!`;
       return { subject, html, text };
     }
-
     case 'booking_confirmed': {
       const subject = `Your booking is confirmed`;
       const html = layout(subject, `
@@ -118,30 +108,23 @@ export function renderEmail(template: EmailTemplate, data: TemplateData): Render
         <p>Your booking with <strong>${data.businessName}</strong> is confirmed for <strong>${data.when}</strong>.</p>
         ${button(`${BRAND.url}/my-bookings.html`, 'View booking')}
       `);
-      const text = `Hi ${name}, your booking with ${data.businessName} is confirmed for ${data.when}.`;
+      const text = `Hi ${name}, your booking with ${data.businessName} is confirmed.`;
       return { subject, html, text };
     }
-
     case 'booking_cancelled': {
       const subject = `Your booking was cancelled`;
       const html = layout(subject, `
         <h1 style="font-size:22px;margin:0 0 16px;">Booking cancelled</h1>
         <p>Hi ${name},</p>
         <p>Your booking with <strong>${data.businessName}</strong> on <strong>${data.when}</strong> has been cancelled.</p>
-        <p>You can rebook anytime.</p>
-        ${button(`${BRAND.url}/browse.html`, 'Find a new time')}
       `);
       const text = `Hi ${name}, your booking with ${data.businessName} was cancelled.`;
       return { subject, html, text };
     }
-
     default:
       throw new Error(`Unknown email template: ${template}`);
   }
 }
-
-// ─── Actual sending ─────────────────────────────────
-// Dev: log to console. Prod: swap for SendGrid/Postmark/Resend.
 
 export async function sendEmail(to: string, template: EmailTemplate, data: TemplateData) {
   const { subject, html, text } = renderEmail(template, data);
@@ -154,11 +137,6 @@ export async function sendEmail(to: string, template: EmailTemplate, data: Templ
     console.log('════════════════════════\n');
     return;
   }
-
-  // Production — plug in your provider
-  // Example with Resend:
-  //   const resend = new Resend(config.RESEND_API_KEY);
-  //   await resend.emails.send({ from: 'BookEasy <hello@bookeasy.demo>', to, subject, html, text });
 
   throw new Error('No email provider configured for production');
 }

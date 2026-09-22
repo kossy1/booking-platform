@@ -16,7 +16,10 @@
     }
     .admin-login-card h1 { color: #fff; font-size: 1.5rem; margin-bottom: 0.25rem; }
     .admin-login-card p.sub { color: #94a3b8; margin-bottom: 2rem; font-size: 0.9rem; }
-    .admin-login-card label { color: #cbd5e1; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    .admin-login-card label {
+      color: #cbd5e1; font-size: 0.8rem; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.05em;
+    }
     .admin-login-card .form-control {
       background: #0f172a; border-color: #334155; color: #fff;
     }
@@ -55,16 +58,16 @@
           <label for="email">Email</label>
           <div class="input-group">
             <span class="input-group-text"><i class="bi bi-envelope"></i></span>
-            <input id="email" type="email" class="form-control" required autocomplete="username"
-                   placeholder="admin@bookeasy.demo" />
+            <input id="email" type="email" class="form-control" required
+                   autocomplete="username" placeholder="admin@bookeasy.demo" />
           </div>
         </div>
         <div class="mb-4">
           <label for="password">Password</label>
           <div class="input-group">
             <span class="input-group-text"><i class="bi bi-lock"></i></span>
-            <input id="password" type="password" class="form-control" required autocomplete="current-password"
-                   placeholder="••••••••" />
+            <input id="password" type="password" class="form-control" required
+                   autocomplete="current-password" placeholder="••••••••" />
           </div>
         </div>
 
@@ -82,7 +85,6 @@
   <script type="module">
     import { adminLogin, adminAuth, $, toast } from '/js/api.js';
 
-    // Bootstrap Icons
     if (!document.querySelector('link[href*="bootstrap-icons"]')) {
       const l = document.createElement('link');
       l.rel = 'stylesheet';
@@ -90,21 +92,20 @@
       document.head.appendChild(l);
     }
 
-    // If already signed in as admin, redirect
     if (adminAuth.isLoggedIn) {
       const next = new URLSearchParams(location.search).get('next');
       location.href = next || '/admin.html';
     }
 
-    const form = $('#admin-login-form');
-    const btn  = $('#submit-btn');
+    const form      = $('#admin-login-form');
+    const btn       = $('#submit-btn');
     const alertSlot = $('#alert-slot');
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       alertSlot.innerHTML = '';
 
-      const email = $('#email').value.trim().toLowerCase();
+      const email    = $('#email').value.trim().toLowerCase();
       const password = $('#password').value;
 
       btn.disabled = true;
@@ -114,10 +115,7 @@
       try {
         const res = await adminLogin({ email, password });
 
-        // Verify the response actually contains admin audience
-        if (res.audience !== 'admin') {
-          throw new Error('Unexpected token audience');
-        }
+        if (res.audience !== 'admin') throw new Error('Unexpected token audience');
 
         adminAuth.save({
           accessToken:  res.accessToken,

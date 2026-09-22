@@ -1,10 +1,8 @@
-// ═══════════════════════════════════════════════════════════════
 // public/js/layout.js
 // Injects Bootstrap + AOS + navbar + footer into every page.
 // Call renderLayout({ active: 'browse' }) at the top of each page.
-// ═══════════════════════════════════════════════════════════════
 
-import { auth } from './api.js';
+import { auth, adminAuth } from './api.js';
 
 const CDN = {
   bootstrapCss: 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css',
@@ -14,7 +12,7 @@ const CDN = {
   aosJs:        'https://unpkg.com/aos@2.3.4/dist/aos.js',
 };
 
-// ─── Head injection ──────────────────────────────────────────
+// ─── Head injection helpers ──────────────────────────
 function injectOnce(tag, key, attrs) {
   const existing = document.querySelector(`${tag}[data-be="${key}"]`);
   if (existing) return existing;
@@ -27,13 +25,12 @@ function injectOnce(tag, key, attrs) {
 }
 
 function loadStyles() {
-  injectOnce('link', 'bs-css', { rel: 'stylesheet', href: CDN.bootstrapCss });
+  injectOnce('link', 'bs-css',   { rel: 'stylesheet', href: CDN.bootstrapCss });
   injectOnce('link', 'bs-icons', { rel: 'stylesheet', href: CDN.icons });
-  injectOnce('link', 'aos-css', { rel: 'stylesheet', href: CDN.aosCss });
+  injectOnce('link', 'aos-css',  { rel: 'stylesheet', href: CDN.aosCss });
 }
 
 function loadScripts() {
-  // Bootstrap bundle
   if (!document.querySelector('script[data-be="bs-js"]')) {
     const s = document.createElement('script');
     s.src = CDN.bootstrapJs;
@@ -42,7 +39,6 @@ function loadScripts() {
     document.head.appendChild(s);
   }
 
-  // AOS + init
   if (!document.querySelector('script[data-be="aos-js"]')) {
     const s = document.createElement('script');
     s.src = CDN.aosJs;
@@ -50,24 +46,25 @@ function loadScripts() {
     s.dataset.be = 'aos-js';
     s.onload = () => {
       if (window.AOS) {
-        window.AOS.init({
-          duration: 600,
-          once: true,
-          offset: 40,
-          easing: 'ease-out-cubic',
-        });
+        window.AOS.init({ duration: 600, once: true, offset: 40, easing: 'ease-out-cubic' });
       }
     };
     document.head.appendChild(s);
   } else if (window.AOS) {
-    // Already loaded — re-init for SPA-style navigation
     window.AOS.refreshHard();
   }
 }
 
-// ─── Navbar markup ───────────────────────────────────────────
+// ─── HTML escape ─────────────────────────────────────
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
+
+// ─── Navbar ──────────────────────────────────────────
 function navHTML(active) {
-  const isActive = (name) => (active === name ? 'active' : '');
+  const isActive = (name) => (active === name ? 'active fw-semibold' : '');
 
   const userMenu = auth.isLoggedIn
     ? `
@@ -100,9 +97,14 @@ function navHTML(active) {
                  <a class="dropdown-item" href="/dashboard.html">
                    <i class="bi bi-speedometer2 me-2"></i>Dashboard
                  </a>
+               </li>
+               <li>
+                 <a class="dropdown-item" href="/manage.html">
+                   <i class="bi bi-gear me-2"></i>Manage business
+                 </a>
                </li>`
-  : ''}
-          ${auth.user?.role === 'admin'
+            : ''}
+          ${auth.user?.role === 'admin' || auth.user?.role === 'support'
             ? `<li>
                  <a class="dropdown-item" href="/admin.html">
                    <i class="bi bi-shield-lock me-2"></i>Admin panel
@@ -118,6 +120,12 @@ function navHTML(active) {
         </ul>
       </li>`
     : `
+      <li class="nav-item">
+        <a class="nav-link" href="/admin-login.html" title="Administrator sign in">
+          <i class="bi bi-shield-lock"></i>
+          <span class="d-none d-lg-inline ms-1">Admin</span>
+        </a>
+      </li>
       <li class="nav-item ms-lg-2">
         <a class="btn btn-outline-primary btn-sm px-3" href="/login.html">Sign in</a>
       </li>
@@ -156,10 +164,24 @@ function navHTML(active) {
   `;
 }
 
-
-// ─── Footer markup ───────────────────────────────────────────
+// ─── Footer ──────────────────────────────────────────
 function footerHTML() {
   const year = new Date().getFullYear();
+
+  // Show "Admin panel" if already logged in as admin/support, else "Admin" login link
+  const isAdminLoggedIn = adminAuth.isLoggedIn;
+  const adminLink = isAdminLoggedIn
+    ? `<li class="mb-2">
+         <a href="/admin.html" class="text-decoration-none text-light" style="opacity:0.75;">
+           <i class="bi bi-shield-lock me-1"></i>Admin panel
+         </a>
+       </li>`
+    : `<li class="mb-2">
+         <a href="/admin-login.html" class="text-decoration-none text-light" style="opacity:0.75;">
+           <i class="bi bi-shield-lock me-1"></i>Admin
+         </a>
+       </li>`;
+
   return `
     <div class="container">
       <div class="row g-4">
@@ -187,20 +209,26 @@ function footerHTML() {
             <li class="mb-2"><a href="#" class="text-decoration-none text-light" style="opacity:0.75;">About</a></li>
             <li class="mb-2"><a href="#" class="text-decoration-none text-light" style="opacity:0.75;">Privacy</a></li>
             <li class="mb-2"><a href="#" class="text-decoration-none text-light" style="opacity:0.75;">Terms</a></li>
+            ${adminLink}
           </ul>
         </div>
 
         <div class="col-lg-4 col-md-12">
           <h6 class="text-uppercase small fw-bold mb-3" style="opacity:0.5;">Get in touch</h6>
           <p class="small mb-2"><i class="bi bi-envelope me-2"></i>hello@bookeasy.demo</p>
-          <p class="small mb-0"><i class="bi bi-geo-alt me-2"></i>New York, NY</p>
+          <p class="small mb-0"><i class="bi bi-geo-alt me-2"></i>Lagos, Nigeria</p>
         </div>
       </div>
 
       <hr class="border-secondary my-4" style="opacity:0.25;">
 
       <div class="d-flex flex-column flex-sm-row justify-content-between align-items-center gap-2 small" style="opacity:0.6;">
-        <div>© ${year} BookEasy — Demo booking platform</div>
+        <div>
+          © ${year} BookEasy — Demo booking platform ·
+          <a href="/admin-login.html" class="text-light text-decoration-none ms-1" title="Administrator sign in">
+            Admin
+          </a>
+        </div>
         <div class="d-flex gap-3">
           <a href="#" class="text-decoration-none text-light"><i class="bi bi-twitter"></i></a>
           <a href="#" class="text-decoration-none text-light"><i class="bi bi-instagram"></i></a>
@@ -211,19 +239,11 @@ function footerHTML() {
   `;
 }
 
-// ─── HTML escaping helper (XSS safety) ──────────────────────
-function escapeHtml(s) {
-  return String(s ?? '').replace(/[&<>"']/g, (c) => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-  }[c]));
-}
-
-// ─── Public API ──────────────────────────────────────────────
+// ─── Public API ──────────────────────────────────────
 export function renderLayout({ active = '' } = {}) {
   loadStyles();
   loadScripts();
 
-  // Inject navbar (if missing)
   if (!document.querySelector('nav.navbar[data-be="main"]')) {
     const nav = document.createElement('nav');
     nav.className = 'navbar navbar-expand-lg sticky-top';
@@ -232,7 +252,6 @@ export function renderLayout({ active = '' } = {}) {
     document.body.prepend(nav);
   }
 
-  // Inject footer (if missing)
   if (!document.querySelector('footer[data-be="main"]')) {
     const footer = document.createElement('footer');
     footer.className = 'bg-dark text-light mt-5 pt-5 pb-4';
@@ -241,13 +260,12 @@ export function renderLayout({ active = '' } = {}) {
     document.body.appendChild(footer);
   }
 
-  // Auto-close mobile nav after clicking a link
+  // Auto-close mobile menu on link click
   document.addEventListener('click', (e) => {
     const link = e.target.closest('.navbar .nav-link, .navbar .dropdown-item');
     if (!link) return;
     const navbar = document.querySelector('.navbar-collapse.show');
     if (navbar) {
-      // Use Bootstrap's collapse API if available; fallback to click on toggler
       if (window.bootstrap?.Collapse) {
         window.bootstrap.Collapse.getOrCreateInstance(navbar).hide();
       } else {
@@ -256,7 +274,7 @@ export function renderLayout({ active = '' } = {}) {
     }
   });
 
-  // Logout handler (event delegation — works with dynamic content)
+  // Logout handler (customer only)
   document.addEventListener('click', async (e) => {
     const logoutLink = e.target.closest('#logout-link');
     if (!logoutLink) return;
@@ -265,16 +283,11 @@ export function renderLayout({ active = '' } = {}) {
     await auth.logout();
   });
 
-  // If the user's not logged in but the page requires auth, they'll be
-  // redirected by requireAuth() in api.js — nothing to do here.
-
-  // Refresh AOS once content is likely painted
   window.addEventListener('load', () => {
     window.AOS?.refreshHard();
   });
 }
 
-// Optional: helper to update nav after login/logout without a full page reload
 export function refreshLayout() {
   const nav = document.querySelector('nav.navbar[data-be="main"]');
   if (nav) {
