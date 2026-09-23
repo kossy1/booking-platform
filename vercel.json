@@ -1,10 +1,9 @@
 {
   "version": 2,
-  "public": true,
   "outputDirectory": "public",
   "cleanUrls": true,
   "trailingSlash": false,
   "rewrites": [
-    { "source": "/(.*)", "destination": "/public/$1" }
+    { "source": "/((?!api/).*)", "destination": "/public/$1" }
   ]
 }
